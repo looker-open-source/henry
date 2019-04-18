@@ -155,11 +155,10 @@ class Fetcher(object):
     # or even better, model.explore.view.field
     def get_used_explore_fields(self, model=None, explore=None, timeframe=90,
                                 min_queries=0):
-        self.fetch_logger.info('Fetching exposed explore fields, %s', locals())
+        self.fetch_logger.info('Fetching used explore fields, %s', locals())
         m = model.replace('_', '^_') + ',' if model is not None else ''
         m += "-i^_^_looker"
         e = ','.join(explore).replace('_', '^_')
-        min_queries = '>=' + str(min_queries)
         timeframe = str(timeframe) + ' days'
         body = {
             "model": "i__looker",
@@ -171,8 +170,7 @@ class Fetcher(object):
                        "history.query_run_count"],
             "filters": {"history.created_date": timeframe,
                         "query.model": m,
-                        "query.view": e,
-                        "history.query_run_count": min_queries},
+                        "query.view": e},
             "limit": "50000"
         }
         # returns only fields used from a given explore
@@ -211,8 +209,11 @@ class Fetcher(object):
 
         for value in field_use_count:
             c[value['field_name']] += value['count']
+
+        # filter based on min_queries
+        c = {k: c[k] for k in c if c[k] >= min_queries}
         self.fetch_logger.info('Fetch Complete :: Exposed Explore Fields ')
-        return dict(c)
+        return c
 
     def get_used_explores(self, model=None, explore=None,
                           timeframe=90, min_queries=0):
