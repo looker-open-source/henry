@@ -239,12 +239,13 @@ Example: from the analyze function run [above](#analyze_explores), we know that 
 +---------+-----------+----------------+------------------------------+
 | model   | explore   | unused_joins   | unused_fields                |
 |---------+-----------+----------------+------------------------------|
-| thelook | cohorts   | N/A            | order_items.created_date     |
+| thelook | cohorts   | users          | order_items.created_date     |
 |         |           |                | order_items.id               |
 |         |           |                | order_items.total_sale_price |
-|         |           |                | users.gender                 |
 +---------+-----------+----------------+------------------------------+
 ```
+If a join is unused, it's implying that fields introduced by that join haven't been used for the defined timeframe. For this reason fields exposed as a result of that join are not explicitly listed as unused fields.
+
 It is very important to note that fields vacuumed fields in one explore are not meant to be completely removed from view files altogether because they might be used in other explores or joins. Instead, one should either hide those fields (if they're not used anywhere else) or exclude them from the explore using the _fields_ LookML parameter.
 
 <a name="logging"></a>
