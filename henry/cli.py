@@ -31,7 +31,7 @@ elif os.path.exists(LOGGING_LOG_PATH) and not os.path.isdir(LOGGING_LOG_PATH):
     sys.exit(1)
 LOGGING_LOG_PATH = os.path.join(LOGGING_LOG_PATH, 'henry.log')
 logging.config.fileConfig(LOGGING_CONFIG_PATH,
-                          defaults={'logfilename': LOGGING_LOG_PATH},
+                          defaults={'logfilename': repr(LOGGING_LOG_PATH)},
                           disable_existing_loggers=False)
 from .commands.analyze import Analyze
 from .commands.vacuum import Vacuum
