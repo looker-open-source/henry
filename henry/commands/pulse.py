@@ -1,7 +1,7 @@
 import json
 import logging
 from textwrap import fill
-from typing import cast, Dict, MutableSequence, Optional, Union, Sequence
+from typing import cast, Dict, MutableSequence, Optional, Sequence
 
 from looker_sdk import models
 
@@ -46,18 +46,32 @@ class Pulse(fetcher.Fetcher):
         for connection in db_connections:
             assert connection.dialect
             assert isinstance(connection.name, str)
-            results = self.sdk.test_connection(
+            resp = self.sdk.test_connection(
                 cast(str, connection.name),
                 models.DelimSequence(connection.dialect.connection_tests),
             )
-            results = list(filter(lambda r: r.status == "error", results))
+            results = list(filter(lambda r: r.status == "error", resp))
             errors = [
                 f"- {fill(cast(str, e.message), width=100)}" for e in results
             ]  # noqa: E501
+
+            resp = self.sdk.run_inline_query(
+                "json",
+                models.WriteQuery(
+                    model="system__activity",
+                    view="history",
+                    fields=["history.query_run_count"],
+                    filters={"history.connection_name": connection.name},
+                    limit="1",
+                ),
+            )
+            query_run_count = json.loads(resp)[0]["history.query_run_count"]
+
             formatted_results.append(
                 {
                     "Connection": connection.name,
                     "Status": "OK" if not errors else "\n".join(errors),
+                    "Query Count": query_run_count,
                 }
             )
         data_controller.tabularize_and_print(formatted_results)
@@ -75,18 +89,20 @@ class Pulse(fetcher.Fetcher):
             view="scheduled_plan",
             fields=["dashboard.title, query.count"],
             filters={
+                "dashboard.title": "-NULL",
                 "history.created_date": "7 days",
                 "history.is_single_query": "Yes",
                 "history.real_dash_id": "-NULL",
                 "history.runtime": ">30",
                 "history.status": "complete",
+                "query.count": ">0",
             },
             sorts=["query.count desc"],
             limit=20,
         )
 
-        result = self.sdk.run_inline_query("json", request)
-        slowest_dashboards = json.loads(result)
+        resp = self.sdk.run_inline_query("json", request)
+        slowest_dashboards = json.loads(resp)
         data_controller.tabularize_and_print(slowest_dashboards)
 
     @spinner.Spinner()
@@ -109,8 +125,8 @@ class Pulse(fetcher.Fetcher):
             sorts=["history.query_run_ount desc"],
             limit=20,
         )
-        result = self.sdk.run_inline_query("json", request)
-        erroring_dashboards = json.loads(result)
+        resp = self.sdk.run_inline_query("json", request)
+        erroring_dashboards = json.loads(resp)
         data_controller.tabularize_and_print(erroring_dashboards)
 
     @spinner.Spinner()
@@ -128,11 +144,13 @@ class Pulse(fetcher.Fetcher):
             sorts=["history.average_runtime desc"],
             limit=20,
         )
-        slowest_explores_json = self.sdk.run_inline_query("json", request)
-        slowest_explores = json.loads(slowest_explores_json)
+        resp = self.sdk.run_inline_query("json", request)
+        slowest_explores = json.loads(resp)
 
-        request.fields = ["history.average_run_time"]
-        avg_query_runtime = self.sdk.run_inline_query("json", request)
+        request.fields = ["history.average_runtime"]
+        resp = json.loads(self.sdk.run_inline_query("json", request))
+        avg_query_runtime = resp[0]["history.average_runtime"]
+        print(f"\bFor context, the average query runtime is {avg_query_runtime:.4f}s")
 
         data_controller.tabularize_and_print(slowest_explores)
 
