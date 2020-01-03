@@ -33,10 +33,7 @@ class Pulse(fetcher.Fetcher):
         print("\bTest 1/6: Checking connections")
         reserved_names = ["looker__internal__analytics", "looker"]
         db_connections: Sequence[models.DBConnection] = list(
-            filter(
-                lambda c: c.name not in reserved_names,
-                self.sdk.all_connections(),  # noqa: E501
-            )
+            filter(lambda c: c.name not in reserved_names, self.sdk.all_connections())
         )
 
         if not db_connections:
@@ -51,9 +48,7 @@ class Pulse(fetcher.Fetcher):
                 models.DelimSequence(connection.dialect.connection_tests),
             )
             results = list(filter(lambda r: r.status == "error", resp))
-            errors = [
-                f"- {fill(cast(str, e.message), width=100)}" for e in results
-            ]  # noqa: E501
+            errors = [f"- {fill(cast(str, e.message), width=100)}" for e in results]
 
             resp = self.sdk.run_inline_query(
                 "json",
@@ -109,8 +104,7 @@ class Pulse(fetcher.Fetcher):
     def check_dashboard_errors(self):
         """Prints a list of erroring dashboard queries."""
         print(
-            "\bTest 3/6: Checking for dashboards with erroring queries in "
-            "the last 7 days"
+            "\bTest 3/6: Checking for dashboards with erroring queries in the last 7 days"
         )
         request = models.WriteQuery(
             model="system__activity",
