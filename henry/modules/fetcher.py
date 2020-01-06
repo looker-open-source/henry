@@ -1,261 +1,293 @@
-from collections import Counter
-import logging
+import abc
+import csv
+import datetime
+import json
+from operator import itemgetter
 import re
+from typing import cast, Dict, Optional, MutableSequence, Sequence, Union
+
+import tabulate
+
+from henry.modules import data_controller
+from henry.modules import exceptions
+from looker_sdk import client, methods, models
 
 
-class Fetcher(object):
-    def __init__(self, looker):
-        self.looker = looker
-        self.fetch_logger = logging.getLogger('fetcher')
+class Fetcher(abc.ABC):
+    def __init__(self, user_input: data_controller.Input):
+        self.sdk = self.configure_sdk(
+            user_input.config_file, user_input.section, user_input.timeout
+        )
+        self.timeframe = f"{user_input.timeframe} days" if user_input else "90 days"
+        self.min_queries = user_input.min_queries or 0
+        self.limit = user_input.limit
+        self.sortkey = user_input.sortkey
+        cmd = user_input.command
+        subcommand = user_input.subcommand or None
+        self.full_cmd = f"{cmd}_{subcommand}" if subcommand else cmd
+        self.save = user_input.save
+        self.quiet = user_input.quiet
 
-    def get_project_files(self, project=None):
-        self.fetch_logger.info('Fetching projects, %s', locals())
-        if project is None:
-            self.fetch_logger.info('Fetching all project files')
-            projects = self.looker.get_projects()
+    def configure_sdk(
+        self,
+        config_file: Optional[str] = "looker.ini",
+        section: Optional[str] = "looker",
+        timeout: Optional[int] = None,
+    ) -> methods.LookerSDK:
+        sdk = client.setup(config_file, section)
+        sdk.transport
+        if timeout:
+            sdk.transport.settings.timeout = timeout
+        return sdk
+
+    def get_models(
+        self, *, project: Optional[str] = None, model: Optional[str] = None
+    ) -> Sequence[models.LookmlModel]:
+        """Returns a list of lookml models."""
+        ml: Sequence[models.LookmlModel]
+        if model:
+            ml = [self.sdk.lookml_model(model)]
         else:
-            self.fetch_logger.info('Fetching project files for %s', project)
-            projects = self.looker.get_project(project)
+            ml = self.sdk.all_lookml_models()
 
-        project_data = []
-        for p in projects:
-            project_files = self.looker.get_project_files(project=p['id'])
+        if project:
+            ml = list(filter(lambda m: m.project_name == project, ml))
+        ml = list(filter(lambda m: m.has_content, ml))
 
-            project_data.append({
-                'name': p['id'],
-                'pr_mode': p['pull_request_mode'],
-                'validation_required': p['validation_required'],
-                'git_remote_url': p['git_remote_url'],
-                'files': project_files
-            })
-        self.fetch_logger.info('Fetch Complete :: Projects')
-        return project_data
+        if not ml:
+            raise exceptions.NotFoundError("No populated model files found.")
 
-    # function that returns list of model definitions or model names (with
-    # verbose 0 or 1 respectively) Allows the user to specify a project name,
-    # a model name or nothing at all. project paramater is a string while model
-    # parameter is a list
-    def get_models(self, project=None, model=None, verbose=0, scoped_names=0):
-        if project is None and model is None:
-            self.fetch_logger.info('Fetching all models, %s', locals())
-            models = self.looker.get_models()
-        elif project is not None and model is None:
-            # if no parameters are specified
-            self.fetch_logger.info('Fetching all models in %s, %s', project,
-                                   locals())
-            r = self.looker.get_models()
-            models = list(filter(lambda x: x['project_name'] == project, r))
-            if not models:
-                self.fetch_logger.error('Project not found')
-                raise Exception('Project not found')
-        elif project is not None and model is not None:
-            # if both project and model paramaters are specified
-            self.fetch_logger.info('Warning: Project parameter ignored. \
-                                   Model names are unique across projects.')
-            models = [self.looker.get_model(model)]
-        else:
-            # if project parameter wasn't passed but model was.
-            self.fetch_logger.info('Fetching model %s, %s', model, locals())
-            models = self.looker.get_model(model_name=model)
+        return ml
 
-        models = list(filter(lambda x: x['has_content'] is True, models))
-        if verbose == 0:
-            models = [(m['project_name'] + ".") * scoped_names + m['name']
-                      for m in models]
-        self.fetch_logger.info('Fetch Complete :: Models')
-        return models
-
-    def get_used_models(self, timeframe=90, min_queries=0):
-        self.fetch_logger.info('Fetching used models from i__looker, %s',
-                               locals())
-        timeframe = str(timeframe) + ' days'
-        min_queries = '>=' + str(min_queries)
-        body = {
-            "model": "i__looker",
-            "view": "history",
-            "fields": ["query.model", "history.query_run_count"],
-            "filters": {"history.created_date": timeframe,
-                        "query.model": "-i^_^_looker",
-                        "history.query_run_count": min_queries
-                        },
-            "limit": "50000"
+    def get_used_models(self) -> Dict[str, int]:
+        """Returns a dictionary with model names as keys and query count as values."""
+        # TODO: filter on min_queries
+        resp = self.sdk.run_inline_query(
+            "json",
+            models.WriteQuery(
+                model="system__activity",
+                view="history",
+                fields=["history.query_run_count, query.model"],
+                filters={
+                    "history.created_date": self.timeframe,
+                    "query.model": "-system^_^_activity",
+                    "history.query_run_count": f">{str(self.min_queries)}",
+                },
+                limit="5000",
+            ),
+        )
+        _results: MutableSequence[Dict[str, int]] = json.loads(resp)
+        results = {
+            str(row["query.model"]): int(row["history.query_run_count"])
+            for row in _results
         }
+        return results
 
-        response = self.looker.run_inline_query("json", body)
-
-        x = {}
-        for r in response:
-            x[r['query.model']] = r['history.query_run_count']
-        self.fetch_logger.info('Used Models Fetch Complete')
-        return(x)
-
-    # errors have to be handled more downstream if explore does not exist due
-    # to bug #32748
-    def get_explores(self, model=None, explore=None, scoped_names=0,
-                     verbose=0):
-        explores = []
-        if explore is not None:
-            self.fetch_logger.info('Fetching explore %s, %s', explore,
-                                   locals())
-            e = self.looker.get_explore(model_name=model, explore_name=explore)
-            if e:
-                explores.extend(e)
+    def get_explores(
+        self, *, model: Optional[str] = None, explore: Optional[str] = None
+    ) -> Sequence[models.LookmlModelExplore]:
+        """Returns a list of explores."""
+        if model and explore:
+            explores = [self.sdk.lookml_model_explore(model, explore)]
         else:
-            self.fetch_logger.info('Fetching all explores, %s', locals())
-            models = self.get_models(model=model, verbose=1)
-            for mdl in models:
-                for e in mdl['explores']:
-                    if verbose == 1:
-                        explores.extend(self.looker.get_explore(mdl['name'],
-                                                                e['name']))
-                    else:
-                        explores.append((mdl['name'], e['name']))
-        self.fetch_logger.info('Fetch Complete :: Explores')
+            all_models = self.get_models(model=model)
+            explores = []
+            for m in all_models:
+                explores.extend(
+                    [self.sdk.lookml_model_explore(m.name, e.name) for e in m.explores]
+                )
         return explores
 
-    def get_explore_fields(self, explore=None, scoped_names=0):
-        self.fetch_logger.info('Parsing explore body for exposed fields')
-        fields = []
-        for dimension in explore['fields']['dimensions']:
-            if dimension['hidden'] is not True:
-                fields.append((explore['model_name']+'.'
-                              + explore['name'] + '.')*scoped_names
-                              + dimension['name'])
-        for measure in explore['fields']['measures']:
-            if measure['hidden'] is not True:
-                fields.append((explore['model_name']+'.'
-                              + explore['name']+'.')*scoped_names
-                              + measure['name'])
-        for fltr in explore['fields']['filters']:
-            if fltr['hidden'] is not True:
-                fields.append((explore['model_name']+'.'
-                              + explore['name']+'.')*scoped_names
-                              + fltr['name'])
-        self.fetch_logger.info('Parsing Complete')
-        return list(set(fields))
+    def get_used_explores(
+        self, *, model: Optional[str] = None, explore: str = ""
+    ) -> Dict[str, int]:
+        """Returns a dictionary with used explore names as keys and query count as values"""
+        resp = self.sdk.run_inline_query(
+            "json",
+            models.WriteQuery(
+                model="system__activity",
+                view="history",
+                fields=["query.view", "history.query_run_count"],
+                filters={
+                    "history.created_date": self.timeframe,
+                    "query.model": model.replace("_", "^_") if model else "",
+                    "history.query_run_count": ">0",
+                    "query.view": explore,
+                },
+                limit="5000",
+            ),
+        )
+        _results: MutableSequence[Dict[str, int]] = json.loads(resp)
+        results = {r["query.view"]: r["history.query_run_count"] for r in _results}
+        return results
 
-    def get_unused_explores(self, model=None, timeframe=90, min_queries=0):
-        self.fetch_logger.info('Fetching unused explores, %s', locals())
-        used_explores = self.get_used_explores(model=model,
-                                               timeframe=timeframe,
-                                               min_queries=min_queries)
-        used_explores = used_explores.keys()
-        all_explores = self.get_explores(model=model)
-        all_explores = [i[1] for i in all_explores]
-        unused_explores = list(set(all_explores) - set(used_explores))
-        self.fetch_logger.info('Fetch Complete:: Unused Explores')
+    def get_unused_explores(self, *, model):
+        """Returns a list of explores that do not meet the min query count requirement
+        for the specified timeframe.
+        """
+        _all = self.get_explores(model=model)
+        used = self.get_used_explores(model=model)
+        unused_explores = [e.name for e in _all if e.name not in used.keys()]
         return unused_explores
 
-    # function that runs i__looker query and returns fully scoped fields used
-    # remember explore names are not unique, filter on model as well
-    # query.explore is the actual explore name
-    # query.model is the model
-    # query.fields are is view.field (view is view name used in the explore)
-    # to uniquely identify fields, explore.view.field should be used,
-    # or even better, model.explore.view.field
-    def get_used_explore_fields(self, model=None, explore=None, timeframe=90,
-                                min_queries=0):
-        self.fetch_logger.info('Fetching used explore fields, %s', locals())
-        m = model.replace('_', '^_') + ',' if model is not None else ''
-        m += "-i^_^_looker"
-        e = ','.join(explore).replace('_', '^_')
-        timeframe = str(timeframe) + ' days'
-        body = {
-            "model": "i__looker",
-            "view": "history",
-            "fields": ["query.model", "query.view",
-                       "query.formatted_fields",
-                       "query.formatted_filters", "query.sorts",
-                       "query.formatted_pivots",
-                       "history.query_run_count"],
-            "filters": {"history.created_date": timeframe,
-                        "query.model": m,
-                        "query.view": e},
-            "limit": "50000"
-        }
-        # returns only fields used from a given explore
-        response = self.looker.run_inline_query("json", body)
-
-        formatted_fields = []
-        for row in response:
-            fields = []
-            explore = row['query.view']
-            model = row['query.model']
-            run_count = row['history.query_run_count']
-            fields.extend(re.findall(r'(\w+\.\w+)',
-                                     str(row['query.formatted_fields'])))
-            fields.extend(re.findall(r'(\w+\.\w+)',
-                                     str(row['query.formatted_filters'])))
-            fields.extend(re.findall(r'(\w+\.\w+)',
-                                     str(row['query.formatted_pivots'])))
-            fields.extend(re.findall(r'(\w+\.\w+)',
-                                     str(row['query.sorts'])))
-            for field in fields:
-                s = model + '.' + explore + '.' + field + '.' + str(run_count)
-                formatted_fields.extend([s])
-
-        field_name = []
-        field_use_count = []
-        for row in formatted_fields:
-            field = '.'.join(row.split('.')[:-1])  # remove the count
-            field_name.append(field)  # model.explore.view scoped
-            count = int(row.split('.')[-1])
-            field_use_count.append({
-                'field_name': field,
-                'count': count
-            })
-
-        c = Counter()
-
-        for value in field_use_count:
-            c[value['field_name']] += value['count']
-
-        # filter based on min_queries
-        c = {k: c[k] for k in c if c[k] >= min_queries}
-        self.fetch_logger.info('Fetch Complete :: Exposed Explore Fields ')
-        return c
-
-    def get_used_explores(self, model=None, explore=None,
-                          timeframe=90, min_queries=0):
-        self.fetch_logger.info('Fetching used explores, %s', locals())
-        timeframe = str(timeframe) + ' days'
-        min_queries = '>=' + str(min_queries)
-        m = model.replace('_', '^_') + ',' if model is not None else ''
-        body = {
-            "model": "i__looker",
-            "view": "history",
-            "fields": ["query.view", "history.query_run_count"],
-            "filters": {"history.created_date": timeframe,
-                        "query.model": m,
-                        "history.query_run_count": min_queries,
-                        "query.view": explore
-                        },
-            "limit": "50000"
-        }
-
-        response = self.looker.run_inline_query("json", body)
-
-        x = {}
-        for r in response:
-            x[r['query.view']] = r['history.query_run_count']
-        self.fetch_logger.info('Fetch Complete :: Used Explores')
-        return(x)
-
-    def test_git_connection(self, project):
-        # enter dev mode
-        self.looker.update_session(mode='dev')
-        # obtain tests available
-        tests = []
-        for test in self.looker.git_connection_tests(project_id=project):
-            tests.append(test['id'])
-        verbose_result = []
-        fail_flag = 0
-        for idx, test in enumerate(tests):
-            r = self.looker.run_git_connection_test(project_id=project,
-                                                    test_id=test)
-            verbose_result.append(r['id'] + ' (' + r['status'] + ')')
-            if r['status'] != 'pass':
-                fail_flag = 1
-        verbose_result = ('\n').join(verbose_result)
-        result = verbose_result if fail_flag == 1 else 'OK'
+    def get_explore_fields(self, explore: models.LookmlModelExplore) -> Sequence[str]:
+        """Return a list of non hidden fields for a given explore"""
+        m = explore.model_name
+        e = explore.name
+        fields = explore.fields
+        assert fields
+        assert fields.dimensions and fields.measures  # and fields.filters
+        dimensions = [f"{m}.{e}.{f.name}" for f in fields.dimensions if not f.hidden]
+        measures = [f"{m}.{e}.{f.name}" for f in fields.measures if not f.hidden]
+        # filters = [f"{m}.{e}.{f.name}" for f in fields.filters if not f.hidden]
+        result = list(set([*dimensions, *measures]))  # *filters]))
         return result
+
+    def get_used_explore_fields(
+        self, *, model: str = "", explore: str = ""
+    ) -> Dict[str, int]:
+        """Returns a list of model.view scoped explore fields as well as the
+        number of times they were used in the specified timeframe as value.
+        """
+        # WARNING: fields used in filters are not found in query.formatted_fields
+        resp = self.sdk.run_inline_query(
+            "json",
+            models.WriteQuery(
+                model="system__activity",
+                view="history",
+                fields=[
+                    "query.model",
+                    "query.view",
+                    "query.formatted_fields",
+                    "history.query_run_count",
+                ],
+                filters={
+                    "history.created_date": self.timeframe,
+                    "query.model": model.replace("_", "^_") if model else "",
+                    "query.view": explore.replace("_", "^_") if explore else "",
+                    "query.formatted_fields": "-NULL",
+                },
+                limit="5000",
+            ),
+        )
+        data = json.loads(resp)
+        used_fields: Dict[str, int] = {}
+        for row in data:
+            model = row["query.model"]
+            explore = row["query.view"]
+            fields = re.findall(r"(\w+\.\w+)", row["query.formatted_fields"])
+            for f in fields:
+                if used_fields.get(f):
+                    used_fields[f] += row["history.query_run_count"]
+                else:
+                    used_fields[f] = row["history.query_run_count"]
+        return used_fields
+
+    def get_explore_field_stats(
+        self, explore: models.LookmlModelExplore
+    ) -> Dict[str, int]:
+        """Return a dictionary with all exposed field names as keys and field query
+        count as values.
+        """
+        all_fields = self.get_explore_fields(explore=explore)
+        field_stats = self.get_used_explore_fields(
+            model=cast(str, explore.model_name), explore=cast(str, explore.name)
+        )
+
+        for field in all_fields:
+            if not field_stats.get(field):
+                field_stats[field] = 0
+
+        return field_stats
+
+    def get_explore_join_stats(
+        self, *, explore: models.LookmlModelExplore, field_stats: Dict[str, int]
+    ) -> Dict[str, int]:
+        """Returns dict containing stats about all joins in an explore."""
+        assert explore.scopes
+        all_joins = explore.scopes.remove(explore.name)
+        explore_field_stats = {j.split(".")[0]: qc for j, qc in field_stats}
+
+        join_stats: Dict[str, int] = {}
+        for join, query_count in explore_field_stats.items():
+            if join_stats.get(join):
+                join_stats[join] += query_count
+            else:
+                join_stats[join] = query_count
+
+        for join in all_joins:
+            if not join_stats.get(join):
+                join_stats[join] = 0
+
+        return join_stats
+
+    def run_git_connection_tests(self, project_id: str):
+        """Run all git connection tests for a given project."""
+        self.sdk.update_session(models.WriteApiSession(workspace_id="dev"))
+        supported_tests = self.sdk.all_git_connection_tests(project_id)
+        results = []
+        for test in supported_tests:
+            resp = self.sdk.run_git_connection_test(
+                project_id, cast(str, test.id)
+            )  # noqa: E501
+            results.append(resp)
+            if resp.status != "pass":
+                break
+        self.sdk.update_session(models.WriteApiSession(workspace_id="production"))
+        errors = list(filter(lambda r: r.status != "pass", results))
+        formatted_results = [f"{r.id} ({r.status})" for r in results]
+        return "\n".join(formatted_results) if errors else "OK"
+
+    def _filter(self, data: Dict[str, int]) -> Dict[str, int]:
+        """Filters on min_queries, this happens after querying the db"""
+        return dict(filter(lambda e: e[1] > self.min_queries), data.items())
+
+    def _limit(self, data):
+        """Limits results printed on screen"""
+        data = data[: self.limit] if self.limit else data
+        return data
+
+    def _sort(self, data: TData) -> TData:
+        """Sorts results as specified by user"""
+        if self.sortkey:
+            sort_key = self.sortkey[0]
+            if sort_key not in data[0].keys():
+                raise KeyError(f"Sort field {sort_key} not found.")
+
+            sort_types = {"ASC": False, "DESC": True}
+            if self.sortkey[1].upper() not in sort_types.keys():
+                raise KeyError(f"Unrecognized sort type: {sortkey[1]}.")
+            sort_type = sort_types[self.sortkey[1].upper()]
+
+            data = sorted(data, key=itemgetter(sort_key), reverse_type=sort_type)
+        return data
+
+    def _save_to_file(self, data: Sequence[Dict[str, Union[int, str]]]):
+        """Save results to a file with name {command}_date_time.csv"""
+        date = datetime.datetime.now().strftime("%y%m%d_%H%M%S")
+        filename = f"{self.full_command}_{date}.csv"
+        with open(filename, "w", newline="") as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=data[0].keys())
+            writer.writeheader()
+            writer.writerows(data)
+
+    def _tabularize_and_print(
+        self, data: Sequence[Dict[str, Union[int, str, bool]]],
+    ):
+        """Prints data in tabular form."""
+        if not data:
+            print("No results found.", end="\n" * 2)
+        else:
+            result = tabulate.tabulate(
+                data, headers="keys", tablefmt="psql", numalign="center"
+            )
+            print(f"\b{result}", end="\n" * 2)
+
+    def output(self, data: Sequence[Dict[str, Union[int, str, bool]]]):
+        """Output generated results and/or save"""
+        data = self._limit(data)
+        data = self._sort(data)
+        if self.save:
+            self._save_to_file(data)
+        if not self.quiet:
+            self._tabularize_and_print(data)
