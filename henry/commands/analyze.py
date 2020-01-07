@@ -8,24 +8,7 @@ from henry.modules import data_controller
 from henry.modules import exceptions
 
 
-# TODO: add sorting in all queries
-# TODO: accept --host to point it to config file
-# TODO: adjust limits accordingly
-# TODO: filter fields
-# TODO: minqueries >= and timeframe "days"
-# TODO: The saving piece
-# TODO: required if x in sys.argv not working
-# TODO: output options needs to be renamed
-
-
-# TODO: vacuum
-# TODO: Error handling
-# TODO: documentation
-# TODO: publish release
-# TODO: add tracking
-# TODO: content - https://self-signed.looker.com:9999/admin/content_activity_dashboard
-
-TResult = Sequence[Dict[str, Union[str, int, bool]]]
+TResult = fetcher.TResult
 
 
 class Analyze(fetcher.Fetcher):
@@ -97,7 +80,7 @@ class Analyze(fetcher.Fetcher):
     ) -> TResult:
         """Analyze explores."""
         all_explores = self.get_explores(model=model, explore=explore)
-        result = []
+        result: fetcher.TResult = []
         for e in all_explores:
             field_stats = self.get_explore_field_stats(e)
             join_stats = self.get_explore_join_stats(explore=e, field_stats=field_stats)
@@ -105,9 +88,9 @@ class Analyze(fetcher.Fetcher):
                 {
                     "Model": cast(str, e.model_name),
                     "Explore": cast(str, e.name),
-                    "Is Hidden": e.hidden,
+                    "Is Hidden": cast(bool, e.hidden),
                     "Has Description": "Yes" if e.description else "No",
-                    "# Joins": len(join_stats.keys()),
+                    "# Joins": len(join_stats),
                     "# Unused Joins": len(self._filter(join_stats)),
                     "# Fields": len(field_stats),
                     "# Unused Fields": len(self._filter(field_stats)),
