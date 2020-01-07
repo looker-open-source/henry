@@ -68,7 +68,7 @@ class Analyze(fetcher.Fetcher):
                     "Model": m.name,
                     "# Explores": len(cast(Sequence, m.explores)),
                     "# Unused Explores": len(self.get_unused_explores(model=m.name)),
-                    "Query Run Count": self.get_used_models().get(m.name) or 0,
+                    "Query Count": self.get_used_models().get(m.name) or 0,
                 }
             )
         return result

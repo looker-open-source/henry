@@ -24,11 +24,11 @@ class Vacuum(fetcher.Fetcher):
             assert isinstance(m.name, str)
             result.append(
                 {
-                    "Model Name": m.name,
+                    "Model": m.name,
                     "Unused Explores": "\n".join(
                         sorted(self.get_unused_explores(m.name))
                     ),
-                    "Query Count": used_models.get(m.name, 0),
+                    "Model Query Count": used_models.get(m.name, 0),
                 }
             )
         return result
