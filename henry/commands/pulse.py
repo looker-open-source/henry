@@ -4,7 +4,6 @@ from typing import cast, Sequence
 
 from looker_sdk import models
 
-from henry.modules import data_controller
 from henry.modules import exceptions
 from henry.modules import fetcher
 from henry.modules import spinner
@@ -16,7 +15,7 @@ class Pulse(fetcher.Fetcher):
     """
 
     @classmethod
-    def run(cls, user_input: data_controller.Input):
+    def run(cls, user_input: fetcher.Input):
         pulse = cls(user_input)
         pulse.check_db_connections()
         pulse.check_dashboard_performance()

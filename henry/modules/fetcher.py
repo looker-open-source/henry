@@ -4,35 +4,44 @@ import datetime
 import json
 from operator import itemgetter
 import re
-from typing import cast, Dict, Optional, MutableSequence, Sequence, Union
+from typing import (
+    Callable,
+    cast,
+    Dict,
+    Optional,
+    NamedTuple,
+    MutableSequence,
+    Union,
+    Sequence,
+    Tuple,
+)
 
 import tabulate
-
-from henry.modules import data_controller
-from henry.modules import exceptions
 from looker_sdk import client, methods, models
+
+from henry.modules import exceptions
+
+
+TResult = MutableSequence[Dict[str, Union[str, int, bool]]]
 
 
 class Fetcher(abc.ABC):
-    def __init__(self, user_input: data_controller.Input):
+    def __init__(self, options: "Input"):
         self.sdk = self.configure_sdk(
-            user_input.config_file, user_input.section, user_input.timeout
+            options.config_file, options.section, options.timeout
         )
-        self.timeframe = f"{user_input.timeframe} days" if user_input else "90 days"
-        self.min_queries = user_input.min_queries or 0
-        self.limit = user_input.limit
-        self.sortkey = user_input.sortkey
-        cmd = user_input.command
-        subcommand = user_input.subcommand or None
-        self.full_cmd = f"{cmd}_{subcommand}" if subcommand else cmd
-        self.save = user_input.save
-        self.quiet = user_input.quiet
+        self.timeframe = f"{options.timeframe} days" if options.timeframe else "90 days"
+        self.min_queries = options.min_queries or 0
+        self.limit = options.limit[0] if options.limit else None
+        self.sortkey = options.sortkey
+        cmd = options.command
+        subcommand = options.subcommand or None
+        self.full_command = f"{cmd}_{subcommand}" if subcommand else cmd
+        self.save = options.save
+        self.quiet = options.quiet
 
     def configure_sdk(
-        self,
-        config_file: Optional[str] = "looker.ini",
-        section: Optional[str] = "looker",
-        timeout: Optional[int] = None,
+        self, config_file: str, section: str, timeout: Optional[int] = 120,
     ) -> methods.LookerSDK:
         sdk = client.setup(config_file, section)
         sdk.transport
@@ -71,7 +80,8 @@ class Fetcher(abc.ABC):
                 filters={
                     "history.created_date": self.timeframe,
                     "query.model": "-system^_^_activity",
-                    "history.query_run_count": f">{str(self.min_queries)}",
+                    "history.query_run_count": ">0",
+                    "history.workspace_id": "production",
                 },
                 limit="5000",
             ),
@@ -93,15 +103,22 @@ class Fetcher(abc.ABC):
             all_models = self.get_models(model=model)
             explores = []
             for m in all_models:
+                assert isinstance(m.name, str)
+                assert m.explores
                 explores.extend(
-                    [self.sdk.lookml_model_explore(m.name, e.name) for e in m.explores]
+                    [
+                        self.sdk.lookml_model_explore(m.name, cast(str, e.name))
+                        for e in m.explores
+                    ]
                 )
         return explores
 
     def get_used_explores(
         self, *, model: Optional[str] = None, explore: str = ""
     ) -> Dict[str, int]:
-        """Returns a dictionary with used explore names as keys and query count as values"""
+        """Returns a dictionary with used explore names as keys and query count as
+        values.
+        """
         resp = self.sdk.run_inline_query(
             "json",
             models.WriteQuery(
@@ -113,41 +130,45 @@ class Fetcher(abc.ABC):
                     "query.model": model.replace("_", "^_") if model else "",
                     "history.query_run_count": ">0",
                     "query.view": explore,
+                    "history.workspace_id": "production",
                 },
                 limit="5000",
             ),
         )
         _results: MutableSequence[Dict[str, int]] = json.loads(resp)
-        results = {r["query.view"]: r["history.query_run_count"] for r in _results}
+        results = {
+            cast(str, r["query.view"]): r["history.query_run_count"] for r in _results
+        }
         return results
 
-    def get_unused_explores(self, *, model):
+    def get_unused_explores(self, model: str):
         """Returns a list of explores that do not meet the min query count requirement
         for the specified timeframe.
         """
         _all = self.get_explores(model=model)
         used = self.get_used_explores(model=model)
+        # Keep only explores that satisfy the min_query requirement
+        used = self._filter(data=used, condition=lambda x: x[1] >= self.min_queries)
         unused_explores = [e.name for e in _all if e.name not in used.keys()]
         return unused_explores
 
     def get_explore_fields(self, explore: models.LookmlModelExplore) -> Sequence[str]:
         """Return a list of non hidden fields for a given explore"""
-        m = explore.model_name
-        e = explore.name
         fields = explore.fields
         assert fields
         assert fields.dimensions and fields.measures  # and fields.filters
-        dimensions = [f"{m}.{e}.{f.name}" for f in fields.dimensions if not f.hidden]
-        measures = [f"{m}.{e}.{f.name}" for f in fields.measures if not f.hidden]
+        dimensions = [cast(str, f.name) for f in fields.dimensions if not f.hidden]
+        measures = [cast(str, f.name) for f in fields.measures if not f.hidden]
         # filters = [f"{m}.{e}.{f.name}" for f in fields.filters if not f.hidden]
         result = list(set([*dimensions, *measures]))  # *filters]))
         return result
 
     def get_used_explore_fields(
-        self, *, model: str = "", explore: str = ""
+        self, *, model: str, explore: str = ""
     ) -> Dict[str, int]:
         """Returns a list of model.view scoped explore fields as well as the
         number of times they were used in the specified timeframe as value.
+        Should always be called with either model, or model and explore
         """
         # WARNING: fields used in filters are not found in query.formatted_fields
         resp = self.sdk.run_inline_query(
@@ -163,9 +184,10 @@ class Fetcher(abc.ABC):
                 ],
                 filters={
                     "history.created_date": self.timeframe,
-                    "query.model": model.replace("_", "^_") if model else "",
+                    "query.model": model.replace("_", "^_"),
                     "query.view": explore.replace("_", "^_") if explore else "",
                     "query.formatted_fields": "-NULL",
+                    "history.workspace_id": "production",
                 },
                 limit="5000",
             ),
@@ -205,19 +227,22 @@ class Fetcher(abc.ABC):
     ) -> Dict[str, int]:
         """Returns dict containing stats about all joins in an explore."""
         assert explore.scopes
-        all_joins = explore.scopes.remove(explore.name)
-        explore_field_stats = {j.split(".")[0]: qc for j, qc in field_stats}
-
+        all_joins = cast(MutableSequence, explore.scopes)
+        all_joins.remove(explore.name)
         join_stats: Dict[str, int] = {}
-        for join, query_count in explore_field_stats.items():
-            if join_stats.get(join):
-                join_stats[join] += query_count
-            else:
-                join_stats[join] = query_count
+        if all_joins:
+            for field, query_count in field_stats.items():
+                join = field.split(".")[0]  # Because all fields are view scoped
+                if join == explore.name:
+                    continue
+                elif join_stats.get(join):
+                    join_stats[join] += query_count
+                else:
+                    join_stats[join] = query_count
 
-        for join in all_joins:
-            if not join_stats.get(join):
-                join_stats[join] = 0
+            for join in all_joins:
+                if not join_stats.get(join):
+                    join_stats[join] = 0
 
         return join_stats
 
@@ -238,16 +263,28 @@ class Fetcher(abc.ABC):
         formatted_results = [f"{r.id} ({r.status})" for r in results]
         return "\n".join(formatted_results) if errors else "OK"
 
-    def _filter(self, data: Dict[str, int]) -> Dict[str, int]:
-        """Filters on min_queries, this happens after querying the db"""
-        return dict(filter(lambda e: e[1] > self.min_queries), data.items())
+    def _filter(
+        self, data: Optional[Dict[str, int]], condition: Optional[Callable] = None
+    ) -> Dict[str, int]:
+        """Filters based on min_queries condition. By default, it returns rows that do
+        not satisfy the min_queries requirement. "condition" can be passed to override
+        this behavior.
+        """
+        result: Dict[str, int]
+        if not data:
+            result = dict()
+        elif condition:
+            result = dict(filter(condition, data.items()))
+        else:
+            result = dict(filter(lambda e: e[1] <= self.min_queries, data.items()))
+        return result
 
     def _limit(self, data):
         """Limits results printed on screen"""
         data = data[: self.limit] if self.limit else data
         return data
 
-    def _sort(self, data: TData) -> TData:
+    def _sort(self, data):
         """Sorts results as specified by user"""
         if self.sortkey:
             sort_key = self.sortkey[0]
@@ -256,10 +293,10 @@ class Fetcher(abc.ABC):
 
             sort_types = {"ASC": False, "DESC": True}
             if self.sortkey[1].upper() not in sort_types.keys():
-                raise KeyError(f"Unrecognized sort type: {sortkey[1]}.")
+                raise KeyError(f"Unrecognized sort type: {self.sortkey[1]}.")
             sort_type = sort_types[self.sortkey[1].upper()]
 
-            data = sorted(data, key=itemgetter(sort_key), reverse_type=sort_type)
+            data = sorted(data, key=itemgetter(sort_key), reverse=sort_type)
         return data
 
     def _save_to_file(self, data: Sequence[Dict[str, Union[int, str]]]):
@@ -267,6 +304,15 @@ class Fetcher(abc.ABC):
         date = datetime.datetime.now().strftime("%y%m%d_%H%M%S")
         filename = f"{self.full_command}_{date}.csv"
         with open(filename, "w", newline="") as csvfile:
+            # Replace "\n" which is required when printing, with ','
+            data = list(
+                map(
+                    lambda x: {
+                        k: cast(str, v).replace("\n", ",") for k, v in x.items()
+                    },
+                    data,
+                )
+            )
             writer = csv.DictWriter(csvfile, fieldnames=data[0].keys())
             writer.writeheader()
             writer.writerows(data)
@@ -276,7 +322,7 @@ class Fetcher(abc.ABC):
     ):
         """Prints data in tabular form."""
         if not data:
-            print("No results found.", end="\n" * 2)
+            print("\bNo results found.", end="\n" * 2)
         else:
             result = tabulate.tabulate(
                 data, headers="keys", tablefmt="psql", numalign="center"
@@ -285,9 +331,26 @@ class Fetcher(abc.ABC):
 
     def output(self, data: Sequence[Dict[str, Union[int, str, bool]]]):
         """Output generated results and/or save"""
-        data = self._limit(data)
         data = self._sort(data)
+        data = self._limit(data)
         if self.save:
             self._save_to_file(data)
         if not self.quiet:
             self._tabularize_and_print(data)
+
+
+class Input(NamedTuple):
+    command: str
+    subcommand: Optional[str] = None
+    project: Optional[str] = None
+    model: Optional[str] = None
+    explore: Optional[str] = None
+    timeframe: Optional[int] = 90
+    min_queries: Optional[int] = 0
+    sortkey: Optional[Tuple[str, str]] = None
+    limit: Optional[Sequence[int]] = None
+    config_file: str = "looker.ini"
+    section: str = "looker"
+    quiet: bool = False
+    save: Optional[bool] = False
+    timeout: Optional[int] = 120

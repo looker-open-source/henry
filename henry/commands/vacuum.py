@@ -1,21 +1,18 @@
 from typing import cast, Optional
 
-from henry.modules import spinner
-from henry.modules import data_controller
 from henry.modules import fetcher
-
-TResult = fetcher.TResult
+from henry.modules import spinner
 
 
 class Vacuum(fetcher.Fetcher):
     @classmethod
-    def run(cls, user_input: data_controller.Input):
+    def run(cls, user_input: fetcher.Input):
         vacuum = cls(user_input)
         if user_input.subcommand == "models":
             result = vacuum.models(project=user_input.project, model=user_input.model)
         elif user_input.subcommand == "explores":
             result = vacuum.explores(model=user_input.model, explore=user_input.explore)
-        vacuum.output(data=cast(TResult, result))
+        vacuum.output(data=cast(fetcher.TResult, result))
 
     @spinner.Spinner()
     def models(self, *, project, model) -> fetcher.TResult:

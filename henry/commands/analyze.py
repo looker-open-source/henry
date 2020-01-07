@@ -4,7 +4,6 @@ from looker_sdk import models
 
 from henry.modules import spinner
 from henry.modules import fetcher
-from henry.modules import data_controller
 from henry.modules import exceptions
 
 
@@ -13,7 +12,7 @@ TResult = fetcher.TResult
 
 class Analyze(fetcher.Fetcher):
     @classmethod
-    def run(cls, user_input: data_controller.Input):
+    def run(cls, user_input: fetcher.Input):
         analyze = cls(user_input)
         if user_input.subcommand == "projects":
             result = analyze.projects(id=user_input.project)

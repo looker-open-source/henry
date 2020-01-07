@@ -4,15 +4,10 @@ import os
 import sys
 
 import henry
-import uuid
-
-
-from .modules import data_controller
-from . import __version__ as pkg
-
-from .commands.analyze import Analyze
-from .commands.vacuum import Vacuum
-from .commands.pulse import Pulse
+from henry.modules import fetcher
+from henry.commands.analyze import Analyze
+from henry.commands.vacuum import Vacuum
+from henry.commands.pulse import Pulse
 
 
 def main():
@@ -242,7 +237,7 @@ def add_common_arguments(parser: argparse.ArgumentParser):
 
 def parse_input(parser: argparse.ArgumentParser):
     args = vars(parser.parse_args())
-    return data_controller.Input(**args)
+    return fetcher.Input(**args)
 
 
 if __name__ == "__main__":
