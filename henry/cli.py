@@ -65,7 +65,7 @@ def setup_pulse_subparser(subparsers):
     )
     pulse_parser.add_argument_group("Authentication")
     pulse_parser.add_argument(
-        "--config_file", type=str, default="looker.ini", help=argparse.SUPPRESS
+        "--config-file", type=str, default="looker.ini", help=argparse.SUPPRESS
     )
     pulse_parser.add_argument(
         "--section", type=str, default="looker", help=argparse.SUPPRESS
@@ -82,7 +82,7 @@ def setup_analyze_subparser(subparsers):
         "-p", "--project", type=str, default=None, help="Filter on a project"
     )
     analyze_projects.add_argument(
-        "--order_by",
+        "--order-by",
         nargs=2,
         metavar=("ORDER_FIELD", "ASC/DESC"),
         dest="sortkey",
@@ -110,10 +110,10 @@ def setup_analyze_subparser(subparsers):
         "--timeframe", type=int, default=90, help="Timeframe, between 0 and 90"
     )
     analyze_models.add_argument(
-        "--min_queries", type=int, default=0, help="Query threshold"
+        "--min-queries", type=int, default=0, help="Query threshold"
     )
     analyze_models.add_argument(
-        "--order_by",
+        "--order-by",
         nargs=2,
         metavar=("ORDER_FIELD", "ASC/DESC"),
         dest="sortkey",
@@ -144,10 +144,10 @@ def setup_analyze_subparser(subparsers):
         "--timeframe", type=int, default=90, help="Timeframe, between 0 and 90"
     )
     analyze_explores.add_argument(
-        "--min_queries", type=int, default=0, help="Query threshold"
+        "--min-queries", type=int, default=0, help="Query threshold"
     )
     analyze_explores.add_argument(
-        "--order_by",
+        "--order-by",
         nargs=2,
         metavar=("ORDER_FIELD", "ASC/DESC"),
         dest="sortkey",
@@ -187,7 +187,7 @@ def setup_vacuum_subparser(subparsers):
     )
 
     vacuum_models.add_argument(
-        "--min_queries",
+        "--min-queries",
         type=int,
         default=0,
         help="Vacuum threshold. Explores with less "
@@ -214,7 +214,7 @@ def setup_vacuum_subparser(subparsers):
     )
 
     vacuum_explores.add_argument(
-        "--min_queries", type=int, default=0, help="Query threshold"
+        "--min-queries", type=int, default=0, help="Query threshold"
     )
     add_common_arguments(vacuum_explores)
 
@@ -230,7 +230,7 @@ def add_common_arguments(parser: argparse.ArgumentParser):
     parser.add_argument("--timeout", type=int, default=120, help=argparse.SUPPRESS)
     parser.add_argument_group("Authentication")
     parser.add_argument(
-        "--config_file", type=str, default="looker.ini", help=argparse.SUPPRESS
+        "--config-file", type=str, default="looker.ini", help=argparse.SUPPRESS
     )
     parser.add_argument("--section", type=str, default="looker", help=argparse.SUPPRESS)
 
