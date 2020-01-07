@@ -1,59 +1,30 @@
-#!/usr/bin/env p/Spinnerython3
+#!/usr/bin/env
 import argparse
 import os
 import sys
-from .modules.spinner import Spinner
-import logging.config
+
 import henry
 import uuid
-from tabulate import tabulate
 
-from .modules import data_controller as dc
-from looker_sdk import client, methods
-import csv
-from typing import Optional
+
+from .modules import data_controller
 from . import __version__ as pkg
 
-LOGGING_CONFIG_PATH = os.path.join(
-    os.path.dirname(henry.__file__), ".support_files/logging.conf"
-)
-METADATA_PATH = os.path.join(os.path.expanduser("~"), ".henry")
-if not os.path.exists(METADATA_PATH):
-    os.mkdir(METADATA_PATH)
-elif os.path.exists(METADATA_PATH) and not os.path.isdir(METADATA_PATH):
-    print("Cannot create metadata directory in %s" % METADATA_PATH)
-    sys.exit(1)
-LOGGING_LOG_PATH = os.path.join(METADATA_PATH, "log")
-if not os.path.exists(LOGGING_LOG_PATH):
-    os.mkdir(LOGGING_LOG_PATH)
-elif os.path.exists(LOGGING_LOG_PATH) and not os.path.isdir(LOGGING_LOG_PATH):
-    print("Cannot create log directory in %s" % LOGGING_LOG_PATH)
-    sys.exit(1)
-LOGGING_LOG_PATH = os.path.join(LOGGING_LOG_PATH, "henry.log")
-logging.config.fileConfig(
-    LOGGING_CONFIG_PATH,
-    defaults={"logfilename": LOGGING_LOG_PATH},
-    disable_existing_loggers=False,
-)
 from .commands.analyze import Analyze
 from .commands.vacuum import Vacuum
 from .commands.pulse import Pulse
 
-logger = logging.getLogger("main")
-
 
 def main():
-    logger.info("Starting henry")
     parser = setup_cli()
-    args = vars(parser.parse_args())
+    user_input = parse_input(parser)
 
-    # run command
-    if args["command"] == "pulse":
-        Pulse.run()
-    elif args["command"] == "analyze":
-        pass
-    elif args["command"] == "vacuum":
-        pass
+    if user_input.command == "pulse":
+        Pulse.run(user_input)
+    elif user_input.command == "analyze":
+        Analyze.run(user_input)
+    elif user_input.command == "vacuum":
+        Vacuum.run(user_input)
     else:
         parser.error()
 
@@ -73,7 +44,9 @@ def create_parser():
         description=description,
         formatter_class=argparse.RawDescriptionHelpFormatter,
         prog="henry",
-        usage="henry command subcommand " "[subcommand options] [global " "options]",
+        usage="henry command subcommand "
+        "[subcommand options] [global "
+        "options]\n\n",
         allow_abbrev=False,
         add_help=False,
     )
@@ -86,21 +59,30 @@ def create_parser():
 def setup_subparsers(parser):
     subparsers = parser.add_subparsers(dest="command", help=argparse.SUPPRESS)
     setup_pulse_subparser(subparsers)
-    setup_analyze_subparser(parser, subparsers)
+    setup_analyze_subparser(subparsers)
     setup_vacuum_subparser(subparsers)
 
 
 def setup_pulse_subparser(subparsers):
-    subparsers.add_parser("pulse", help="pulse help")
+    pulse_parser = subparsers.add_parser("pulse", help="pulse help")
+    pulse_parser.add_argument(
+        "--timeout", type=int, default=120, help=argparse.SUPPRESS
+    )
+    pulse_parser.add_argument_group("Authentication")
+    pulse_parser.add_argument(
+        "--config_file", type=str, default="looker.ini", help=argparse.SUPPRESS
+    )
+    pulse_parser.add_argument(
+        "--section", type=str, default="looker", help=argparse.SUPPRESS
+    )
 
 
-def setup_analyze_subparser(parent_parser, subparsers):
+def setup_analyze_subparser(subparsers):
     analyze_parser = subparsers.add_parser("analyze")
-    analyze_subparsers = analyze_parser.add_subparsers()
+    analyze_subparsers = analyze_parser.add_subparsers(dest="subcommand")
 
     analyze_projects = analyze_subparsers.add_parser("projects")
 
-    analyze_projects.set_defaults(which="projects")
     analyze_projects.add_argument(
         "-p", "--project", type=str, default=None, help="Filter on a project"
     )
@@ -118,9 +100,9 @@ def setup_analyze_subparser(parent_parser, subparsers):
         nargs=1,
         help="Limit results. No limit by default",
     )
+    add_common_arguments(analyze_projects)
 
     analyze_models = analyze_subparsers.add_parser("models")
-    analyze_models.set_defaults(which="models")
     models_group = analyze_models.add_mutually_exclusive_group()
 
     models_group.add_argument(
@@ -152,9 +134,8 @@ def setup_analyze_subparser(parent_parser, subparsers):
     add_common_arguments(analyze_models)
 
     analyze_explores = analyze_subparsers.add_parser("explores")
-    analyze_explores.set_defaults(which="explores")
     analyze_explores.add_argument(
-        "-model",
+        "-m",
         "--model",
         type=str,
         default=None,
@@ -191,11 +172,9 @@ def setup_vacuum_subparser(subparsers):
     vacuum_parser = subparsers.add_parser(
         "vacuum", help="vacuum help", usage="henry vacuum"
     )
-    vacuum_parser.set_defaults(which=None)
-    vacuum_subparsers = vacuum_parser.add_subparsers()
+    vacuum_subparsers = vacuum_parser.add_subparsers(dest="subcommand")
     vacuum_models = vacuum_subparsers.add_parser("models")
     vacuum_explores = vacuum_subparsers.add_parser("explores")
-    vacuum_models.set_defaults(which="models")
     vm_group = vacuum_models.add_mutually_exclusive_group()
     vm_group.add_argument(
         "-p", "--project", type=str, default=None, help="Filter on Project"
@@ -222,7 +201,6 @@ def setup_vacuum_subparser(subparsers):
     )
     add_common_arguments(vacuum_models)
 
-    vacuum_explores.set_defaults(which="explores")
     vacuum_explores.add_argument(
         "-m",
         "--model",
@@ -246,19 +224,25 @@ def setup_vacuum_subparser(subparsers):
     add_common_arguments(vacuum_explores)
 
 
-def add_common_arguments(parser):
+def add_common_arguments(parser: argparse.ArgumentParser):
     parser.add_argument(
-        "--output", type=str, default=None, help="Path to file for saving the output",
+        "--save",
+        action="store_true",
+        default=False,
+        help="flag to save output to CSV.",
     )
     parser.add_argument("-q", "--quiet", action="store_true", help="Silence output")
-    parser.add_argument(
-        "--plain",
-        default=None,
-        action="store_true",
-        help="Show results in a table format " "without the gridlines",
-    )
+    parser.add_argument("--timeout", type=int, default=120, help=argparse.SUPPRESS)
     parser.add_argument_group("Authentication")
-    parser.add_argument("--path", type=str, default="", help=argparse.SUPPRESS)
+    parser.add_argument(
+        "--config_file", type=str, default="looker.ini", help=argparse.SUPPRESS
+    )
+    parser.add_argument("--section", type=str, default="looker", help=argparse.SUPPRESS)
+
+
+def parse_input(parser: argparse.ArgumentParser):
+    args = vars(parser.parse_args())
+    return data_controller.Input(**args)
 
 
 if __name__ == "__main__":
