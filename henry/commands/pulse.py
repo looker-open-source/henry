@@ -1,7 +1,6 @@
 import json
-import logging
 from textwrap import fill
-from typing import cast, Dict, MutableSequence, Optional, Sequence
+from typing import cast, Sequence
 
 from looker_sdk import models
 
@@ -17,8 +16,8 @@ class Pulse(fetcher.Fetcher):
     """
 
     @classmethod
-    def run(cls, output_options: Optional[Dict[str, bool]] = None):
-        pulse = cls(output_options=output_options)
+    def run(cls, user_input: data_controller.Input):
+        pulse = cls(user_input)
         pulse.check_db_connections()
         pulse.check_dashboard_performance()
         pulse.check_dashboard_errors()
@@ -27,7 +26,7 @@ class Pulse(fetcher.Fetcher):
         pulse.check_legacy_features()
 
     @spinner.Spinner()
-    def check_db_connections(self) -> Sequence[Dict[str, str]]:
+    def check_db_connections(self):
         """Gets all db connections and runs all supported tests against them.
         """
         print("\bTest 1/6: Checking connections")
@@ -39,7 +38,7 @@ class Pulse(fetcher.Fetcher):
         if not db_connections:
             raise exceptions.NotFoundError("No connections found.")
 
-        formatted_results: MutableSequence[Dict[str, str]] = []
+        formatted_results = []
         for connection in db_connections:
             assert connection.dialect
             assert isinstance(connection.name, str)
@@ -69,7 +68,7 @@ class Pulse(fetcher.Fetcher):
                     "Query Count": query_run_count,
                 }
             )
-        data_controller.tabularize_and_print(formatted_results)
+        self._tabularize_and_print(formatted_results)
 
     @spinner.Spinner()
     def check_dashboard_performance(self):
@@ -98,13 +97,13 @@ class Pulse(fetcher.Fetcher):
 
         resp = self.sdk.run_inline_query("json", request)
         slowest_dashboards = json.loads(resp)
-        data_controller.tabularize_and_print(slowest_dashboards)
+        self._tabularize_and_print(slowest_dashboards)
 
     @spinner.Spinner()
     def check_dashboard_errors(self):
         """Prints a list of erroring dashboard queries."""
         print(
-            "\bTest 3/6: Checking for dashboards with erroring queries in the last 7 days"
+            "\bTest 3/6: Checking for dashboards with erroring queries in the last 7 days"  # noqa: B950
         )
         request = models.WriteQuery(
             model="system__activity",
@@ -121,7 +120,7 @@ class Pulse(fetcher.Fetcher):
         )
         resp = self.sdk.run_inline_query("json", request)
         erroring_dashboards = json.loads(resp)
-        data_controller.tabularize_and_print(erroring_dashboards)
+        self._tabularize_and_print(erroring_dashboards)
 
     @spinner.Spinner()
     def check_explore_performance(self):
@@ -144,9 +143,12 @@ class Pulse(fetcher.Fetcher):
         request.fields = ["history.average_runtime"]
         resp = json.loads(self.sdk.run_inline_query("json", request))
         avg_query_runtime = resp[0]["history.average_runtime"]
-        print(f"\bFor context, the average query runtime is {avg_query_runtime:.4f}s")
+        if avg_query_runtime:
+            print(
+                f"\bFor context, the average query runtime is {avg_query_runtime:.4f}s"
+            )
 
-        data_controller.tabularize_and_print(slowest_explores)
+        self._tabularize_and_print(slowest_explores)
 
     @spinner.Spinner()
     def check_schedule_failures(self):
@@ -165,7 +167,7 @@ class Pulse(fetcher.Fetcher):
         )
         result = self.sdk.run_inline_query("json", request)
         failed_schedules = json.loads(result)
-        data_controller.tabularize_and_print(failed_schedules)
+        self._tabularize_and_print(failed_schedules)
 
     @spinner.Spinner()
     def check_legacy_features(self):
@@ -173,4 +175,4 @@ class Pulse(fetcher.Fetcher):
         print("\bTest 6/6: Checking for enabled legacy features")
         lf = list(filter(lambda f: f.enabled, self.sdk.all_legacy_features()))
         legacy_features = [{"Feature": cast(str, f.name)} for f in lf]
-        data_controller.tabularize_and_print(legacy_features)
+        self._tabularize_and_print(legacy_features)
