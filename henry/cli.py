@@ -4,10 +4,8 @@ import os
 import sys
 
 import henry
+from henry.commands import analyze, pulse, vacuum
 from henry.modules import fetcher
-from henry.commands.analyze import Analyze
-from henry.commands.vacuum import Vacuum
-from henry.commands.pulse import Pulse
 
 
 def main():
@@ -15,11 +13,11 @@ def main():
     user_input = parse_input(parser)
 
     if user_input.command == "pulse":
-        Pulse.run(user_input)
+        pulse.Pulse.run(user_input)
     elif user_input.command == "analyze":
-        Analyze.run(user_input)
+        analyze.Analyze.run(user_input)
     elif user_input.command == "vacuum":
-        Vacuum.run(user_input)
+        vacuum.Vacuum.run(user_input)
     else:
         parser.error()
 
