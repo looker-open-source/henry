@@ -42,7 +42,7 @@ class Pulse(fetcher.Fetcher):
             assert connection.dialect
             assert isinstance(connection.name, str)
             resp = self.sdk.test_connection(
-                cast(str, connection.name),
+                connection.name,
                 models.DelimSequence(connection.dialect.connection_tests),
             )
             results = list(filter(lambda r: r.status == "error", resp))

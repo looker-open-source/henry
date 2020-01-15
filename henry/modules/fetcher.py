@@ -209,9 +209,11 @@ class Fetcher:
         """Return a dictionary with all exposed field names as keys and field query
         count as values.
         """
+        assert isinstance(explore.model_name, str)
+        assert isinstance(explore.name, str)
         all_fields = self.get_explore_fields(explore=explore)
         field_stats = self.get_used_explore_fields(
-            model=cast(str, explore.model_name), explore=cast(str, explore.name)
+            model=explore.model_name, explore=explore.name
         )
 
         for field in all_fields:
@@ -224,8 +226,8 @@ class Fetcher:
         self, *, explore: models.LookmlModelExplore, field_stats: Dict[str, int]
     ) -> Dict[str, int]:
         """Returns dict containing stats about all joins in an explore."""
-        assert explore.scopes
-        all_joins = cast(MutableSequence, explore.scopes)
+        assert isinstance(explore.scopes, MutableSequence)
+        all_joins = explore.scopes
         all_joins.remove(explore.name)
         join_stats: Dict[str, int] = {}
         if all_joins:
@@ -250,9 +252,8 @@ class Fetcher:
         supported_tests = self.sdk.all_git_connection_tests(project_id)
         results = []
         for test in supported_tests:
-            resp = self.sdk.run_git_connection_test(
-                project_id, cast(str, test.id)
-            )  # noqa: E501
+            assert isinstance(test.id, str)
+            resp = self.sdk.run_git_connection_test(project_id, test.id)
             results.append(resp)
             if resp.status != "pass":
                 break
