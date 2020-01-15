@@ -1,4 +1,3 @@
-import abc
 import csv
 import datetime
 import json
@@ -25,7 +24,7 @@ from henry.modules import exceptions
 TResult = MutableSequence[Dict[str, Union[str, int, bool]]]
 
 
-class Fetcher(abc.ABC):
+class Fetcher:
     def __init__(self, options: "Input"):
         self.sdk = self.configure_sdk(
             options.config_file, options.section, options.timeout
@@ -70,7 +69,6 @@ class Fetcher(abc.ABC):
 
     def get_used_models(self) -> Dict[str, int]:
         """Returns a dictionary with model names as keys and query count as values."""
-        # TODO: filter on min_queries
         resp = self.sdk.run_inline_query(
             "json",
             models.WriteQuery(
