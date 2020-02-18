@@ -57,7 +57,9 @@ def setup_subparsers(parser):
 
 
 def setup_pulse_subparser(subparsers):
-    pulse_parser = subparsers.add_parser("pulse", help="pulse help")
+    pulse_parser = subparsers.add_parser(
+        "pulse", help="pulse help", usage="henry pulse [global options]"
+    )
     pulse_parser.add_argument(
         "--timeout", type=int, default=120, help=argparse.SUPPRESS
     )
@@ -71,7 +73,9 @@ def setup_pulse_subparser(subparsers):
 
 
 def setup_analyze_subparser(subparsers):
-    analyze_parser = subparsers.add_parser("analyze")
+    analyze_parser = subparsers.add_parser(
+        "analyze", help="analyze help", usage="henry analyze"
+    )
     analyze_subparsers = analyze_parser.add_subparsers(dest="subcommand")
 
     analyze_projects = analyze_subparsers.add_parser("projects")
