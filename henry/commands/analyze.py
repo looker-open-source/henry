@@ -38,7 +38,7 @@ class Analyze(fetcher.Fetcher):
 
             result.append(
                 {
-                    "Project Name": p.name,
+                    "Project": p.name,
                     "# Models": sum(map(lambda p: p.type == "model", p_files)),
                     "# View Files": sum(map(lambda p: p.type == "view", p_files)),
                     "Git Connection Status": git_connection_test_results,

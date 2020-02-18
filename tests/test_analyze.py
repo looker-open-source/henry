@@ -18,7 +18,7 @@ def test_analyze_projects(analyze: analyze.Analyze, test_project_name: str):
     assert isinstance(result, list)
     assert len(result) == 1
     result = result[0]
-    assert result["Project Name"] == test_project_name
+    assert result["Project"] == test_project_name
     assert result["# Models"] == 3
     assert result["# View Files"] == 1
     assert result["PR Mode"] == "off"

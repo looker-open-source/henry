@@ -63,6 +63,38 @@ In order to display usage information, use:
 
 Henry makes use of the [Looker SDK](https://github.com/looker-open-source/sdk-codegen/tree/master/python) to issue API calls and requires API3 credentials. These can provided either using an .ini file or environment variables as documented [here](https://github.com/looker-open-source/sdk-codegen#environment-variable-configuration). By default, the tool looks for a "looker.ini" file in the working directory. If the configuration file is named differently or located elsewhere, it must be specified using the `--config-file` argument.
 
+Example .ini file:
+
+```
+[Looker]
+# Base URL for API. Do not include /api/* in the url
+base_url=https://self-signed.looker.com:19999
+# API 3 client id
+client_id=YourClientID
+# API 3 client secret
+client_secret=YourClientSecret
+# Set to false if testing locally against self-signed certs. Otherwise leave True
+verify_ssl=True
+
+[Production]
+base_url=https://production.looker.com:19999
+client_id=YourClientID
+client_secret=YourClientSecret
+verify_ssl=True
+```
+
+Assuming the above ini file contents, Henry can be run as follows:
+  
+ $ henry pulse --config-file=looker.ini --section=Looker
+    
+  which due to defaults, is equivalent to
+    
+    $ henry pulse
+
+Running it using the details under the `Production` section can be done as follows:
+
+    $ henry pulse --section=Production
+
 <a name="api_timeout_settings"></a>
 
 #### API timeout settings
@@ -99,7 +131,7 @@ The `analyze projects` command scans projects for their content as well as check
 
 ```
 +-------------------+---------------+--------------+-------------------------+---------------------+------------------------+
-| Project Na        |  # Models     |  # View      | Git Connection Status   | PR Mode             | Is Validation Required |
+| Project           |  # Models     | # View Files | Git Connection Status   | PR Mode             | Is Validation Required |
 |-------------------+---------------+--------------+-------------------------+---------------------+------------------------|
 | marketing         |       1       |      13      | OK                      | links               | True                   |
 | admin             |       2       |      74      | OK                      | off                 | True                   |
@@ -138,16 +170,16 @@ Shows explores and their usage. If the `--min-queries` argument is passed, joins
 +---------+-----------------------------------------+-------------+-------------------+--------------+----------------+---------------+-----------------+---------------+
 | Model   | Explore                                 | Is Hidden   | Has Description   |   # Joins    | # Unused Joins |    # Fields   | # Unused Fields |  Query Count  |
 |---------+-----------------------------------------+-------------+-------------------+--------------+----------------+---------------+-----------------+---------------|
-| thelook | cohorts                                 | True        | No                |      3       |       0        |      19       |        4        |      333      |
-| thelook | data_tool                               | True        | No                |      3       |       0        |      111      |       90        |      736      |
-| thelook | order_items                             | False       | No                |      7       |       0        |      153      |       16        |    126898     |
-| thelook | events                                  | False       | No                |      6       |       0        |      167      |       68        |     19372     |
-| thelook | sessions                                | False       | No                |      6       |       0        |      167      |       83        |     12205     |
-| thelook | affinity                                | False       | No                |      2       |       0        |      34       |       13        |     3179      |
-| thelook | orders_with_share_of_wallet_application | False       | No                |      9       |       0        |      161      |       140       |     1586      |
-| thelook | journey_mapping                         | False       | No                |      11      |       2        |      238      |       228       |      14       |
-| thelook | inventory_snapshot                      | False       | No                |      3       |       0        |      25       |       15        |      33       |
-| thelook | kitten_order_items                      | True        | No                |      8       |       0        |      154      |       138       |      39       |
+| thelook | cohorts                                 | True        | False             |      3       |       0        |      19       |        4        |      333      |
+| thelook | data_tool                               | True        | False             |      3       |       0        |      111      |       90        |      736      |
+| thelook | order_items                             | False       | True              |      7       |       0        |      153      |       16        |    126898     |
+| thelook | events                                  | False       | True              |      6       |       0        |      167      |       68        |     19372     |
+| thelook | sessions                                | False       | False             |      6       |       0        |      167      |       83        |     12205     |
+| thelook | affinity                                | False       | False             |      2       |       0        |      34       |       13        |     3179      |
+| thelook | orders_with_share_of_wallet_application | False       | True              |      9       |       0        |      161      |       140       |     1586      |
+| thelook | journey_mapping                         | False       | False             |      11      |       2        |      238      |       228       |      14       |
+| thelook | inventory_snapshot                      | False       | False             |      3       |       0        |      25       |       15        |      33       |
+| thelook | kitten_order_items                      | True        | False             |      8       |       0        |      154      |       138       |      39       |
 +---------+-----------------------------------------+-------------+-------------------+--------------+----------------+---------------+-----------------+---------------+
 ```
 
