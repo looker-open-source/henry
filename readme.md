@@ -39,7 +39,7 @@ for issues with Henry. Issues can be logged via https://github.com/looker-open-s
 
 ## Installation
 
-Henry is published on [PyPI](https://pypi.org/project/henry/) and can be installed using pip:
+Henry requires python3.7+. It is published on [PyPI](https://pypi.org/project/henry/) and can be installed using pip:
 
     $ pip install henry
 
@@ -84,11 +84,11 @@ verify_ssl=True
 ```
 
 Assuming the above ini file contents, Henry can be run as follows:
-  
- $ henry pulse --config-file=looker.ini --section=Looker
-    
-  which due to defaults, is equivalent to
-    
+
+    $ henry pulse --config-file=looker.ini --section=Looker
+
+which due to defaults, is equivalent to
+
     $ henry pulse
 
 Running it using the details under the `Production` section can be done as follows:
