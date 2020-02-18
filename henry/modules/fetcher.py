@@ -1,70 +1,113 @@
 import csv
 import datetime
 import json
-from operator import itemgetter
 import re
+import uuid
+from operator import itemgetter
 from typing import (
     Callable,
-    cast,
     Dict,
-    Optional,
-    NamedTuple,
     MutableSequence,
-    Union,
+    NamedTuple,
+    Optional,
     Sequence,
     Tuple,
+    Union,
+    cast,
 )
 
 import tabulate
-from looker_sdk import client, methods, models
+from looker_sdk import error
+from looker_sdk.rtl import api_settings, auth_session, requests_transport, serialize
+from looker_sdk.sdk import methods, models
 
 from henry.modules import exceptions
 
+from .. import __version__ as pkg
 
 TResult = MutableSequence[Dict[str, Union[str, int, bool]]]
 
 
 class Fetcher:
     def __init__(self, options: "Input"):
-        self.sdk = self.configure_sdk(
-            options.config_file, options.section, options.timeout
-        )
         self.timeframe = f"{options.timeframe} days" if options.timeframe else "90 days"
         self.min_queries = options.min_queries or 0
         self.limit = options.limit[0] if options.limit else None
         self.sortkey = options.sortkey
         cmd = options.command
-        subcommand = options.subcommand or None
-        self.full_command = f"{cmd}_{subcommand}" if subcommand else cmd
+        sub_cmd = options.subcommand or None
+        self.cmd = f"{cmd}_{sub_cmd}" if sub_cmd else cmd
         self.save = options.save
         self.quiet = options.quiet
+        self.sdk = self.configure_sdk(
+            options.config_file, options.section, options.timeout
+        )
+        self._verify_api_credentials()
 
     def configure_sdk(
-        self, config_file: str, section: str, timeout: Optional[int] = 120,
+        self, config_file: str, section: str, timeout: Optional[int],
     ) -> methods.LookerSDK:
-        sdk = client.setup(config_file, section)
-        sdk.transport
+        """Instantiates and returns a LookerSDK object and overrides default timeout if
+        specified by user.
+        """
+        settings = api_settings.ApiSettings.configure(config_file, section)
+        user_agent_tag = f"Henry v{pkg.__version__}: cmd={self.cmd}, sid={uuid.uuid1()}"
+        settings.headers = {
+            "Content-Type": "application/json",
+            "User-Agent": user_agent_tag,
+        }
         if timeout:
-            sdk.transport.settings.timeout = timeout
-        return sdk
+            settings.timeout = timeout
+        settings.api_version = "3.1"
+        transport = requests_transport.RequestsTransport.configure(settings)
+        return methods.LookerSDK(
+            auth_session.AuthSession(settings, transport, serialize.deserialize),
+            serialize.deserialize,
+            serialize.serialize,
+            transport,
+        )
+
+    def _verify_api_credentials(self):
+        try:
+            self.sdk.me()
+        except error.SDKError as e:
+            print("Error retreiving self using API. Please check your credentials.")
+            raise (e)
+
+    def get_projects(
+        self, project_id: Optional[str] = None
+    ) -> Sequence[models.Project]:
+        """Returns a list of projects."""
+        try:
+            if project_id:
+                projects = [self.sdk.project(project_id)]
+            else:
+                projects = self.sdk.all_projects()
+        except error.SDKError:
+            raise exceptions.NotFoundError("An error occured while getting projects.")
+        return projects
 
     def get_models(
         self, *, project: Optional[str] = None, model: Optional[str] = None
     ) -> Sequence[models.LookmlModel]:
         """Returns a list of lookml models."""
-        ml: Sequence[models.LookmlModel]
-        if model:
-            ml = [self.sdk.lookml_model(model)]
-        else:
-            ml = self.sdk.all_lookml_models()
-
+        ret: Sequence[models.LookmlModel]
         if project:
-            ml = list(filter(lambda m: m.project_name == project, ml))
-        ml = list(filter(lambda m: m.has_content, ml))
-
-        if not ml:
-            raise exceptions.NotFoundError("No populated model files found.")
-
+            self.get_projects(project)
+        try:
+            if model:
+                ml = [self.sdk.lookml_model(model)]
+            else:
+                ml = self.sdk.all_lookml_models()
+        except error.SDKError:
+            raise exceptions.NotFoundError("An error occured while getting models.")
+        else:
+            if project:
+                # .lower() is used so behavior is consistent with /project endpoint
+                ml = list(
+                    filter(lambda m: m.project_name.lower() == project.lower(), ml,)
+                )
+            ml = list(filter(lambda m: cast(bool, m.has_content), ml))
         return ml
 
     def get_used_models(self) -> Dict[str, int]:
@@ -72,14 +115,14 @@ class Fetcher:
         resp = self.sdk.run_inline_query(
             "json",
             models.WriteQuery(
-                model="system__activity",
+                model="i__looker",
                 view="history",
                 fields=["history.query_run_count, query.model"],
                 filters={
                     "history.created_date": self.timeframe,
-                    "query.model": "-system^_^_activity",
+                    "query.model": "-system^_^_activity, -i^_^_looker",
                     "history.query_run_count": ">0",
-                    "history.workspace_id": "production",
+                    "user.dev_mode": "No",
                 },
                 limit="5000",
             ),
@@ -95,20 +138,25 @@ class Fetcher:
         self, *, model: Optional[str] = None, explore: Optional[str] = None
     ) -> Sequence[models.LookmlModelExplore]:
         """Returns a list of explores."""
-        if model and explore:
-            explores = [self.sdk.lookml_model_explore(model, explore)]
-        else:
-            all_models = self.get_models(model=model)
-            explores = []
-            for m in all_models:
-                assert isinstance(m.name, str)
-                assert m.explores
-                explores.extend(
-                    [
-                        self.sdk.lookml_model_explore(m.name, cast(str, e.name))
-                        for e in m.explores
-                    ]
-                )
+        try:
+            if model and explore:
+                explores = [self.sdk.lookml_model_explore(model, explore)]
+            elif not explore:
+                all_models = self.get_models(model=model)
+                explores = []
+                for m in all_models:
+                    assert isinstance(m.name, str)
+                    assert isinstance(m.explores, list)
+                    explores.extend(
+                        [
+                            self.sdk.lookml_model_explore(m.name, cast(str, e.name))
+                            for e in m.explores
+                        ]
+                    )
+        except error.SDKError:
+            raise exceptions.NotFoundError(
+                "An error occured while getting models/explores."
+            )
         return explores
 
     def get_used_explores(
@@ -120,7 +168,7 @@ class Fetcher:
         resp = self.sdk.run_inline_query(
             "json",
             models.WriteQuery(
-                model="system__activity",
+                model="i__looker",
                 view="history",
                 fields=["query.view", "history.query_run_count"],
                 filters={
@@ -128,7 +176,7 @@ class Fetcher:
                     "query.model": model.replace("_", "^_") if model else "",
                     "history.query_run_count": ">0",
                     "query.view": explore,
-                    "history.workspace_id": "production",
+                    "user.dev_mode": "No",
                 },
                 limit="5000",
             ),
@@ -152,13 +200,15 @@ class Fetcher:
 
     def get_explore_fields(self, explore: models.LookmlModelExplore) -> Sequence[str]:
         """Return a list of non hidden fields for a given explore"""
+        # TODO: filters. Conditional/Always filters don't need to be added separately
+        # because they are required to be in the field list. What about filter only
+        # fields?
         fields = explore.fields
         assert fields
-        assert fields.dimensions and fields.measures  # and fields.filters
+        assert fields.dimensions and fields.measures
         dimensions = [cast(str, f.name) for f in fields.dimensions if not f.hidden]
         measures = [cast(str, f.name) for f in fields.measures if not f.hidden]
-        # filters = [f"{m}.{e}.{f.name}" for f in fields.filters if not f.hidden]
-        result = list(set([*dimensions, *measures]))  # *filters]))
+        result = sorted(list(set([*dimensions, *measures])))
         return result
 
     def get_used_explore_fields(
@@ -168,16 +218,16 @@ class Fetcher:
         number of times they were used in the specified timeframe as value.
         Should always be called with either model, or model and explore
         """
-        # WARNING: fields used in filters are not found in query.formatted_fields
         resp = self.sdk.run_inline_query(
             "json",
             models.WriteQuery(
-                model="system__activity",
+                model="i__looker",
                 view="history",
                 fields=[
                     "query.model",
                     "query.view",
                     "query.formatted_fields",
+                    "query.formatted_filters",
                     "history.query_run_count",
                 ],
                 filters={
@@ -196,11 +246,28 @@ class Fetcher:
             model = row["query.model"]
             explore = row["query.view"]
             fields = re.findall(r"(\w+\.\w+)", row["query.formatted_fields"])
+            recorded = []
             for f in fields:
                 if used_fields.get(f):
                     used_fields[f] += row["history.query_run_count"]
                 else:
                     used_fields[f] = row["history.query_run_count"]
+                recorded.append(f)
+
+            # A field used as a filter in a query is not listed in query.formatted_fields,
+            # BUT if the field is used as both a filter and a dimension/measure, it's listed in both
+            # query.formatted_fields and query.formatted_filters. The recorded variable keeps track of this, so
+            # that no double counting occurs.
+            filters = row["query.formatted_filters"]
+            if filters:
+                parsed_filters = re.findall(r"(\w+\.\w+)+", filters)
+                for f in parsed_filters:
+                    if f in recorded:
+                        continue
+                    elif used_fields.get(f):
+                        used_fields[f] += row["history.query_run_count"]
+                    else:
+                        used_fields[f] = row["history.query_run_count"]
         return used_fields
 
     def get_explore_field_stats(
@@ -232,7 +299,7 @@ class Fetcher:
         join_stats: Dict[str, int] = {}
         if all_joins:
             for field, query_count in field_stats.items():
-                join = field.split(".")[0]  # Because all fields are view scoped
+                join = field.split(".")[0]  # Because all fields are view (join) scoped
                 if join == explore.name:
                     continue
                 elif join_stats.get(join):
@@ -243,7 +310,6 @@ class Fetcher:
             for join in all_joins:
                 if not join_stats.get(join):
                     join_stats[join] = 0
-
         return join_stats
 
     def run_git_connection_tests(self, project_id: str):
@@ -278,12 +344,16 @@ class Fetcher:
             result = dict(filter(lambda e: e[1] <= self.min_queries, data.items()))
         return result
 
-    def _limit(self, data):
+    def _limit(
+        self, data: Sequence[Dict[str, Union[int, str, bool]]]
+    ) -> Sequence[Dict[str, Union[int, str, bool]]]:
         """Limits results printed on screen"""
         data = data[: self.limit] if self.limit else data
         return data
 
-    def _sort(self, data):
+    def _sort(
+        self, data: Sequence[Dict[str, Union[int, str, bool]]]
+    ) -> Sequence[Dict[str, Union[int, str, bool]]]:
         """Sorts results as specified by user"""
         if self.sortkey:
             sort_key = self.sortkey[0]
@@ -301,14 +371,12 @@ class Fetcher:
     def _save_to_file(self, data: Sequence[Dict[str, Union[int, str]]]):
         """Save results to a file with name {command}_date_time.csv"""
         date = datetime.datetime.now().strftime("%y%m%d_%H%M%S")
-        filename = f"{self.full_command}_{date}.csv"
+        filename = f"{self.cmd}_{date}.csv"
         with open(filename, "w", newline="") as csvfile:
             # Replace "\n" which is required when printing, with ','
             data = list(
                 map(
-                    lambda x: {
-                        k: cast(str, v).replace("\n", ",") for k, v in x.items()
-                    },
+                    lambda x: {k: str(v).replace("\n", ",") for k, v in x.items()},
                     data,
                 )
             )
@@ -349,7 +417,7 @@ class Input(NamedTuple):
     sortkey: Optional[Tuple[str, str]] = None
     limit: Optional[Sequence[int]] = None
     config_file: str = "looker.ini"
-    section: str = "looker"
+    section: str = "Looker"
     quiet: bool = False
     save: Optional[bool] = False
     timeout: Optional[int] = 120
