@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import cast, Optional
 
 from henry.modules import fetcher
 from henry.modules import spinner
@@ -12,10 +12,10 @@ class Vacuum(fetcher.Fetcher):
             result = vacuum.models(project=user_input.project, model=user_input.model)
         elif user_input.subcommand == "explores":
             result = vacuum.explores(model=user_input.model, explore=user_input.explore)
-        vacuum.output(data=result)
+        vacuum.output(data=cast(fetcher.TResult, result))
 
     @spinner.Spinner()
-    def models(self, *, project, model) -> fetcher.TResult:
+    def models(self, *, project: Optional[str] = None, model: str) -> fetcher.TResult:
         """Analyze models."""
         all_models = self.get_models(project=project, model=model)
         used_models = self.get_used_models()
@@ -39,7 +39,6 @@ class Vacuum(fetcher.Fetcher):
     ) -> fetcher.TResult:
         """Analyze explores"""
         explores = self.get_explores(model=model, explore=explore)
-
         result: fetcher.TResult = []
         for e in explores:
             assert isinstance(e.name, str)
