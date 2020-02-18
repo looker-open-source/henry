@@ -11,11 +11,12 @@ flake8-bugbear = "*"
 pytest = "*"
 pytest-cov = "*"
 ptipython = "*"
+pyyaml = "*"
+twine = "*"
 
 [packages]
 looker-sdk = "*"
 tabulate = "*"
-pyyaml = "*"
 
 [requires]
 python_version = "3.7"
