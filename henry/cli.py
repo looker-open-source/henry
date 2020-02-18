@@ -66,7 +66,7 @@ def setup_pulse_subparser(subparsers):
         "--config-file", type=str, default="looker.ini", help=argparse.SUPPRESS
     )
     pulse_parser.add_argument(
-        "--section", type=str, default="looker", help=argparse.SUPPRESS
+        "--section", type=str, default="Looker", help=argparse.SUPPRESS
     )
 
 
@@ -219,10 +219,7 @@ def setup_vacuum_subparser(subparsers):
 
 def add_common_arguments(parser: argparse.ArgumentParser):
     parser.add_argument(
-        "--save",
-        action="store_true",
-        default=False,
-        help="flag to save output to CSV.",
+        "--save", action="store_true", default=False, help="Save output to CSV.",
     )
     parser.add_argument("-q", "--quiet", action="store_true", help="Silence output")
     parser.add_argument("--timeout", type=int, default=120, help=argparse.SUPPRESS)
@@ -230,7 +227,7 @@ def add_common_arguments(parser: argparse.ArgumentParser):
     parser.add_argument(
         "--config-file", type=str, default="looker.ini", help=argparse.SUPPRESS
     )
-    parser.add_argument("--section", type=str, default="looker", help=argparse.SUPPRESS)
+    parser.add_argument("--section", type=str, default="Looker", help=argparse.SUPPRESS)
 
 
 def parse_input(parser: argparse.ArgumentParser):
