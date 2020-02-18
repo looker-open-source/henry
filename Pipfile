@@ -8,9 +8,14 @@ black = "*"
 mypy = "*"
 flake8 = "*"
 flake8-bugbear = "*"
+pytest = "*"
+pytest-cov = "*"
+ptipython = "*"
 
 [packages]
 looker-sdk = "*"
+tabulate = "*"
+pyyaml = "*"
 
 [requires]
 python_version = "3.7"
