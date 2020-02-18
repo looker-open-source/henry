@@ -1,109 +1,26 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-import io
-import os
-import sys
-from shutil import rmtree
-from setuptools import setup, Command
+from setuptools import setup  # type: ignore
 
-# Package meta-data.
+from henry import __version__ as pkg
+
 NAME = "henry"
-DESCRIPTION = "A Looker Cleanup Tool"
-URL = "https://github.com/looker-open-source/henry"
-EMAIL = "jax@looker.com"
-AUTHOR = "Joseph Axisa"
-REQUIRES_PYTHON = ">=3.6"
-VERSION = ""
-
-# What packages are required for this module to be executed?
-REQUIRED = ["looker-sdk", "tabulate"]
-
-# Optional packages
-EXTRAS = {}
-
-here = os.path.abspath(os.path.dirname(__file__))
-
-try:
-    with io.open(os.path.join(here, "README.md"), encoding="utf-8") as f:
-        long_description = "\n" + f.read()
-except FileNotFoundError:
-    long_description = DESCRIPTION
-
-# Load the package's __version__.py module as a dictionary.
-about = {}
-if not VERSION:
-    with open(os.path.join(here, NAME, "__version__.py")) as f:
-        exec(f.read(), about)
-else:
-    about["__version__"] = VERSION
-
-if not (sys.version_info.major == 3 and sys.version_info.minor >= 6):
-    sys.exit("Sorry, Henry requires Python 3.6 or later.")
-
-
-class UploadCommand(Command):
-    """Support setup.py upload."""
-
-    description = "Build and publish the package."
-    user_options = []
-
-    @staticmethod
-    def status(s):
-        """Prints things in bold."""
-        print("\033[1m{0}\033[0m".format(s))
-
-    def initialize_options(self):
-        pass
-
-    def finalize_options(self):
-        pass
-
-    def run(self):
-        try:
-            self.status("Removing previous builds…")
-            rmtree(os.path.join(here, "dist"))
-        except OSError:
-            pass
-
-        self.status("Building Source and Wheel distribution…")
-        os.system("{0} setup.py sdist bdist_wheel".format(sys.executable))
-
-        self.status("Uploading the package to PyPI via Twine…")
-        os.system("twine upload dist/*")
-
-        self.status("Pushing git tags…")
-        os.system("git tag v{0}".format(about["__version__"]))
-        os.system("git push --tags")
-
-        sys.exit()
-
+VERSION = pkg.__version__
+REQUIRES = ["looker-sdk==0.1.3b7", "tabulate"]
 
 setup(
-    name=NAME,
-    version=about["__version__"],
-    description=DESCRIPTION,
-    long_description=long_description,
-    long_description_content_type="text/markdown",
-    author=AUTHOR,
-    author_email=EMAIL,
-    python_requires=REQUIRES_PYTHON,
-    url=URL,
-    packages=["henry", "henry/commands", "henry/modules"],
-    data_files=[
-        ("henry/.support_files/", ["henry/.support_files/logging.conf"]),
-        ("henry/.support_files/", ["henry/.support_files/help.rtf"]),
-    ],
-    entry_points={"console_scripts": ["henry=henry.cli:main"],},
-    install_requires=REQUIRED,
-    extras_require=EXTRAS,
-    include_package_data=True,
+    author="Joseph Axisa",
+    author_email="jax@looker.com",
+    description="A Looker Cleanup Tool",
+    install_requires=REQUIRES,
     license="MIT",
-    classifiers=[
-        "License :: OSI Approved :: MIT License",
-        "Programming Language :: Python",
-        "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.6",
-        "Programming Language :: Python :: 3.7",
-    ],
-    cmdclass={"upload": UploadCommand,},
+    long_description=open("README.md", encoding="utf-8").read(),
+    long_description_content_type="text/markdown",
+    keywords=["Looker Cleanup", "Looker Henry", "Henry"],
+    name=NAME,
+    packages=["henry", "henry/commands", "henry/modules"],
+    data_files=[("henry/.support_files/", ["henry/.support_files/help.rtf"])],
+    include_package_data=True,
+    entry_points={"console_scripts": ["henry=henry.cli:main"]},
+    python_requires=">=3.7.0, <3.8",
+    url="https://pypi.python.org/pypi/henry",
+    version=VERSION,
 )
