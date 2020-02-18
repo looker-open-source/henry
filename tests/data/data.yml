@@ -1,0 +1,93 @@
+project: Henry
+model:
+  name: henry_qa
+  unused: false
+  explores:
+    - name: "explore_2_joins_all_used"
+      description: True
+      hidden: False
+      joins:
+        - name: join1
+        - name: join2
+      fields:
+        - name: "explore_2_joins_all_used.d1"
+        - name: "explore_2_joins_all_used.d2"
+        - name: "explore_2_joins_all_used.d3"
+        - name: "explore_2_joins_all_used.m1"
+        - name: "join1.d1"
+        - name: "join1.d2"
+        - name: "join1.d3"
+        - name: "join1.m1"
+        - name: "join2.d1"
+        - name: "join2.d2"
+        - name: "join2.d3"
+        - name: "join2.d4"
+          filter_only: true
+          value: "complete"
+        - name: "join2.m1"
+    - name: "explore_2_joins_1_used"
+      description: False
+      hidden: False
+      joins:
+        - name: join1
+        - name: join2
+          unused: true
+      fields:
+        - name: "explore_2_joins_1_used.d1"
+        - name: "explore_2_joins_1_used.d2"
+        - name: "explore_2_joins_1_used.d3"
+        - name: "explore_2_joins_1_used.m1"
+        - name: "join1.d1"
+        - name: "join1.d2"
+        - name: "join1.d3"
+        - name: "join1.m1"
+        - name: "join2.d1"
+          unused: true
+        - name: "join2.d2"
+          unused: true
+        - name: "join2.d3"
+          unused: true
+        - name: "join2.d4"
+          unused: true
+        - name: "join2.m1"
+          unused: true
+    - name: "unused_explore_no_joins"
+      unused: true
+      description: False
+      hidden: False
+      fields:
+        - name: "unused_explore_no_joins.d1"
+        - name: "unused_explore_no_joins.d2"
+        - name: "unused_explore_no_joins.d3"
+        - name: "unused_explore_no_joins.m1"
+    - name: "unused_explore_2_joins"
+      unused: true
+      description: False
+      hidden: False
+      joins:
+        - name: join1
+          unused: true
+        - name: join2
+          unused: true
+      fields:
+        - name: "unused_explore_2_joins.d1"
+        - name: "unused_explore_2_joins.d2"
+        - name: "unused_explore_2_joins.d3"
+        - name: "unused_explore_2_joins.m1"
+        - name: "join1.d1"
+        - name: "join1.d2"
+        - name: "join1.d3"
+        - name: "join1.m1"
+        - name: "join2.d1"
+        - name: "join2.d2"
+        - name: "join2.d3"
+        - name: "join2.d4"
+        - name: "join2.m1"
+unused_model:
+  name: henry_dusty
+  unused: true
+  explores:
+    - name: unused_1
+      unused: true
+    - name: unused_2
+      unused: true

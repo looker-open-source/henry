@@ -1,318 +1,242 @@
-#!/usr/bin/env python3
-from .modules.lookerapi import LookerApi
+#!/usr/bin/env
 import argparse
 import os
-import errno
 import sys
-from .modules.spinner import Spinner
-from .modules.auth import authenticate
-import logging.config
-import henry
-from pathlib import PosixPath
-import json
-import uuid
-from tabulate import tabulate
-from .modules import data_controller as dc
-import csv
-from . import __version__ as pkg
-LOGGING_CONFIG_PATH = os.path.join(os.path.dirname(henry.__file__),
-                                   '.support_files/logging.conf')
-METADATA_PATH = os.path.join(os.path.expanduser('~'), '.henry')
-if not os.path.exists(METADATA_PATH):
-    os.mkdir(METADATA_PATH)
-elif os.path.exists(METADATA_PATH) and not os.path.isdir(METADATA_PATH):
-    print('Cannot create metadata directory in %s' % METADATA_PATH)
-    sys.exit(1)
-LOGGING_LOG_PATH = os.path.join(METADATA_PATH, 'log')
-if not os.path.exists(LOGGING_LOG_PATH):
-    os.mkdir(LOGGING_LOG_PATH)
-elif os.path.exists(LOGGING_LOG_PATH) and not os.path.isdir(LOGGING_LOG_PATH):
-    print('Cannot create log directory in %s' % LOGGING_LOG_PATH)
-    sys.exit(1)
-LOGGING_LOG_PATH = os.path.join(LOGGING_LOG_PATH, 'henry.log')
-logging.config.fileConfig(LOGGING_CONFIG_PATH,
-                          defaults={'logfilename': LOGGING_LOG_PATH},
-                          disable_existing_loggers=False)
-from .commands.analyze import Analyze
-from .commands.vacuum import Vacuum
-from .commands.pulse import Pulse
 
-logger = logging.getLogger('main')
-# sys.tracebacklimit = -1 # enable only on shipped release
+import henry
+from henry.commands import analyze, pulse, vacuum
+from henry.modules import fetcher
 
 
 def main():
-    logger.info('Starting henry')
-    HELP_PATH = os.path.join(os.path.dirname(henry.__file__),
-                             '.support_files/help.rtf')
-    with open(HELP_PATH, 'r', encoding='unicode_escape') as myfile:
-        descStr = myfile.read()
+    parser = setup_cli()
+    user_input = parse_input(parser)
 
-    # load custom config settings if defined in ~/.henry/henry.json
-    settings_file = PosixPath(os.path.join(METADATA_PATH, 'settings.json')).expanduser()
-    timeout = 120
-    config_path = PosixPath.cwd().joinpath('config.yml')
-    if settings_file.is_file():
-        with open(settings_file, 'r') as f:
-            settings = json.load(f)
-            timeout = settings.get('api_conn_timeout', timeout)
-            if type(timeout) is list:
-                timeout = tuple(timeout)
-            config_path = settings.get('config_path', config_path)
-        logger.info(f'Loaded config settings from ~/.henry/settings.json, {settings}')
+    if user_input.command == "pulse":
+        pulse.Pulse.run(user_input)
+    elif user_input.command == "analyze":
+        analyze.Analyze.run(user_input)
+    elif user_input.command == "vacuum":
+        vacuum.Vacuum.run(user_input)
     else:
-        logger.info('No custom config file found. Using defaults.')
+        parser.error()
+
+
+def setup_cli():
+    parser = create_parser()
+    setup_subparsers(parser)
+    return parser
+
+
+def create_parser():
+    help_file = os.path.join(os.path.dirname(henry.__file__), ".support_files/help.rtf")
+    with open(help_file, "r", encoding="unicode_escape") as myfile:
+        description = myfile.read()
 
     parser = argparse.ArgumentParser(
-        description=descStr,
+        description=description,
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        prog='henry',
-        usage='henry command subcommand '
-              '[subcommand options] [global '
-              'options]',
+        prog="henry",
+        usage="henry command subcommand "
+        "[subcommand options] [global "
+        "options]\n\n",
         allow_abbrev=False,
-        add_help=False)
+        add_help=False,
+    )
 
-    subparsers = parser.add_subparsers(dest='command',
-                                       help=argparse.SUPPRESS)
     parser.add_argument("-h", "--help", action="help", help=argparse.SUPPRESS)
 
-    # subparsers.required = True # works, but might do without for now.
+    return parser
 
-    pulse = subparsers.add_parser('pulse', help='pulse help')
 
-    analyze_parser = subparsers.add_parser('analyze', help='analyze help',
-                                           usage='henry analyze')
-    analyze_parser.set_defaults(which=None)
-    analyze_subparsers = analyze_parser.add_subparsers()
-    analyze_projects = analyze_subparsers.add_parser('projects')
-    analyze_models = analyze_subparsers.add_parser('models')
-    analyze_explores = analyze_subparsers.add_parser('explores')
+def setup_subparsers(parser):
+    subparsers = parser.add_subparsers(dest="command", help=argparse.SUPPRESS)
+    setup_pulse_subparser(subparsers)
+    setup_analyze_subparser(subparsers)
+    setup_vacuum_subparser(subparsers)
 
-    # project subcommand
-    analyze_projects.set_defaults(which='projects')
-    analyze_projects.add_argument('-p', '--project',
-                                  type=str,
-                                  default=None,
-                                  help='Filter on a project')
-    analyze_projects.add_argument('--order_by',
-                                  nargs=2,
-                                  metavar=('ORDER_FIELD', 'ASC/DESC'),
-                                  dest='sortkey',
-                                  help='Sort results by a field')
-    analyze_projects.add_argument('--limit',
-                                  type=int,
-                                  default=None,
-                                  nargs=1,
-                                  help='Limit results. No limit by default')
 
-    # models subcommand
-    analyze_models.set_defaults(which='models')
+def setup_pulse_subparser(subparsers):
+    pulse_parser = subparsers.add_parser(
+        "pulse", help="pulse help", usage="henry pulse [global options]"
+    )
+    pulse_parser.add_argument(
+        "--timeout", type=int, default=120, help=argparse.SUPPRESS
+    )
+    pulse_parser.add_argument_group("Authentication")
+    pulse_parser.add_argument(
+        "--config-file", type=str, default="looker.ini", help=argparse.SUPPRESS
+    )
+    pulse_parser.add_argument(
+        "--section", type=str, default="Looker", help=argparse.SUPPRESS
+    )
+
+
+def setup_analyze_subparser(subparsers):
+    analyze_parser = subparsers.add_parser(
+        "analyze", help="analyze help", usage="henry analyze"
+    )
+    analyze_subparsers = analyze_parser.add_subparsers(dest="subcommand")
+
+    analyze_projects = analyze_subparsers.add_parser("projects")
+
+    analyze_projects.add_argument(
+        "-p", "--project", type=str, default=None, help="Filter on a project"
+    )
+    analyze_projects.add_argument(
+        "--order-by",
+        nargs=2,
+        metavar=("ORDER_FIELD", "ASC/DESC"),
+        dest="sortkey",
+        help="Sort results by a field",
+    )
+    analyze_projects.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        nargs=1,
+        help="Limit results. No limit by default",
+    )
+    add_common_arguments(analyze_projects)
+
+    analyze_models = analyze_subparsers.add_parser("models")
     models_group = analyze_models.add_mutually_exclusive_group()
 
-    models_group.add_argument('-p', '--project',
-                              type=str,
-                              default=None,
-                              help='Filter on project')
-    models_group.add_argument('-model', '--model',
-                              type=str,
-                              default=None,
-                              help='Filter on model')
-    analyze_models.add_argument('--timeframe',
-                                type=int,
-                                default=90,
-                                help='Timeframe (between 0 and 90)')
-    analyze_models.add_argument('--min_queries',
-                                type=int,
-                                default=0,
-                                help='Query threshold')
-    analyze_models.add_argument('--order_by',
-                                nargs=2,
-                                metavar=('ORDER_FIELD', 'ASC/DESC'),
-                                dest='sortkey',
-                                help='Sort results by a field')
-    analyze_models.add_argument('--limit',
-                                type=int,
-                                default=None,
-                                nargs=1,
-                                help='Limit results. No limit by default')
+    models_group.add_argument(
+        "-p", "--project", type=str, default=None, help="Filter on project"
+    )
+    models_group.add_argument(
+        "-model", "--model", type=str, default=None, help="Filter on model"
+    )
+    analyze_models.add_argument(
+        "--timeframe", type=int, default=90, help="Timeframe, between 0 and 90"
+    )
+    analyze_models.add_argument(
+        "--min-queries", type=int, default=0, help="Query threshold"
+    )
+    analyze_models.add_argument(
+        "--order-by",
+        nargs=2,
+        metavar=("ORDER_FIELD", "ASC/DESC"),
+        dest="sortkey",
+        help="Sort results by a field",
+    )
+    analyze_models.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        nargs=1,
+        help="Limit results. No limit by default",
+    )
+    add_common_arguments(analyze_models)
 
-    # explores subcommand
-    analyze_explores.set_defaults(which='explores')
-    analyze_explores.add_argument('-model', '--model',
-                                  type=str,
-                                  default=None,
-                                  required=('--explore') in sys.argv,
-                                  help='Filter on model')
-    analyze_explores.add_argument('-e', '--explore',
-                                  default=None,
-                                  help='Filter on model')
-    analyze_explores.add_argument('--timeframe',
-                                  type=int,
-                                  default=90,
-                                  help='Timeframe (between 0 and 90)')
-    analyze_explores.add_argument('--min_queries',
-                                  type=int,
-                                  default=0,
-                                  help='Query threshold')
-    analyze_explores.add_argument('--order_by',
-                                  nargs=2,
-                                  metavar=('ORDER_FIELD', 'ASC/DESC'),
-                                  dest='sortkey',
-                                  help='Sort results by a field')
-    analyze_explores.add_argument('--limit',
-                                  type=int,
-                                  default=None,
-                                  nargs=1,
-                                  help='Limit results. No limit by default')
+    analyze_explores = analyze_subparsers.add_parser("explores")
+    analyze_explores.add_argument(
+        "-m",
+        "--model",
+        type=str,
+        default=None,
+        required=("--explore") in sys.argv,
+        help="Filter on model",
+    )
+    analyze_explores.add_argument(
+        "-e", "--explore", default=None, help="Filter on model"
+    )
+    analyze_explores.add_argument(
+        "--timeframe", type=int, default=90, help="Timeframe, between 0 and 90"
+    )
+    analyze_explores.add_argument(
+        "--min-queries", type=int, default=0, help="Query threshold"
+    )
+    analyze_explores.add_argument(
+        "--order-by",
+        nargs=2,
+        metavar=("ORDER_FIELD", "ASC/DESC"),
+        dest="sortkey",
+        help="Sort results by a field",
+    )
+    analyze_explores.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        nargs=1,
+        help="Limit results. No limit by default",
+    )
+    add_common_arguments(analyze_explores)
 
-    # VACUUM Subcommand
-    vacuum_parser = subparsers.add_parser('vacuum', help='vacuum help',
-                                          usage='henry vacuum')
-    vacuum_parser.set_defaults(which=None)
-    vacuum_subparsers = vacuum_parser.add_subparsers()
-    vacuum_models = vacuum_subparsers.add_parser('models')
-    vacuum_explores = vacuum_subparsers.add_parser('explores')
-    vacuum_models.set_defaults(which='models')
+
+def setup_vacuum_subparser(subparsers):
+    vacuum_parser = subparsers.add_parser(
+        "vacuum", help="vacuum help", usage="henry vacuum"
+    )
+    vacuum_subparsers = vacuum_parser.add_subparsers(dest="subcommand")
+    vacuum_models = vacuum_subparsers.add_parser("models")
+    vacuum_explores = vacuum_subparsers.add_parser("explores")
     vm_group = vacuum_models.add_mutually_exclusive_group()
-    vm_group.add_argument('-p', '--project',
-                          type=str,
-                          default=None,
-                          help='Filter on Project')
-    vm_group.add_argument('-m', '--model',
-                          type=str,
-                          default=None,
-                          help='Filter on model')
+    vm_group.add_argument(
+        "-p", "--project", type=str, default=None, help="Filter on Project"
+    )
+    vm_group.add_argument(
+        "-m", "--model", type=str, default=None, help="Filter on model"
+    )
 
-    vacuum_models.add_argument('--timeframe',
-                               type=int,
-                               default=90,
-                               help='Usage period to examine (in the range of '
-                                    '0-90 days). Default: 90 days.')
+    vacuum_models.add_argument(
+        "--timeframe",
+        type=int,
+        default=90,
+        help="Usage period to examine (in the range of "
+        "0-90 days). Default: 90 days.",
+    )
 
-    vacuum_models.add_argument('--min_queries',
-                               type=int,
-                               default=0,
-                               help='Vacuum threshold. Explores with less '
-                                    'queries in the given usage period will '
-                                    'be vacuumed. Default: 0 queries.')
+    vacuum_models.add_argument(
+        "--min-queries",
+        type=int,
+        default=0,
+        help="Vacuum threshold. Explores with less "
+        "queries in the given usage period will "
+        "be vacuumed. Default: 0 queries.",
+    )
+    add_common_arguments(vacuum_models)
 
-    vacuum_explores.set_defaults(which='explores')
-    vacuum_explores.add_argument('-m', '--model',
-                                 type=str,
-                                 default=None,
-                                 required=('--explore') in sys.argv,
-                                 help='Filter on model')
+    vacuum_explores.add_argument(
+        "-m",
+        "--model",
+        type=str,
+        default=None,
+        required=("--explore") in sys.argv,
+        help="Filter on model",
+    )
 
-    vacuum_explores.add_argument('-e', '--explore',
-                                 type=str,
-                                 default=None,
-                                 help='Filter on explore')
+    vacuum_explores.add_argument(
+        "-e", "--explore", type=str, default=None, help="Filter on explore"
+    )
 
-    vacuum_explores.add_argument('--timeframe',
-                                 type=int,
-                                 default=90,
-                                 help='Timeframe (between 0 and 90)')
+    vacuum_explores.add_argument(
+        "--timeframe", type=int, default=90, help="Timeframe, between 0 and 90"
+    )
 
-    vacuum_explores.add_argument('--min_queries',
-                                 type=int,
-                                 default=0,
-                                 help='Query threshold')
+    vacuum_explores.add_argument(
+        "--min-queries", type=int, default=0, help="Query threshold"
+    )
+    add_common_arguments(vacuum_explores)
 
-    for subparser in [analyze_projects, analyze_models, analyze_explores,
-                      vacuum_models, vacuum_explores, pulse]:
-        subparser.add_argument('--output',
-                               type=str,
-                               default=None,
-                               help='Path to file for saving the output')
-        subparser.add_argument('-q', '--quiet',
-                               action='store_true',
-                               help='Silence output')
-        subparser.add_argument('--plain',
-                               default=None,
-                               action='store_true',
-                               help='Show results in a table format '
-                                    'without the gridlines')
-        subparser.add_argument_group("Authentication")
-        subparser.add_argument('--host', type=str, default='looker',
-                               required=any(k in sys.argv for k in
-                                            ['--client_id', '--client_secret',
-                                             '--alias']),
-                               help=argparse.SUPPRESS)
-        subparser.add_argument('--port', type=int, default=19999,
-                               help=argparse.SUPPRESS)
-        subparser.add_argument('--client_id', type=str,
-                               required=any(k in sys.argv for k in
-                                            ['--client_secret', '--alias']),
-                               help=argparse.SUPPRESS)
-        subparser.add_argument('--client_secret', type=str,
-                               required=any(k in sys.argv for k in
-                                            ['--client_id', '--alias']),
-                               help=argparse.SUPPRESS)
-        subparser.add_argument('--alias', type=str,
-                               help=argparse.SUPPRESS)
-        subparser.add_argument('--path', type=str, default='',
-                               help=argparse.SUPPRESS)
 
+def add_common_arguments(parser: argparse.ArgumentParser):
+    parser.add_argument(
+        "--save", action="store_true", default=False, help="Save output to CSV.",
+    )
+    parser.add_argument("-q", "--quiet", action="store_true", help="Silence output")
+    parser.add_argument("--timeout", type=int, default=120, help=argparse.SUPPRESS)
+    parser.add_argument_group("Authentication")
+    parser.add_argument(
+        "--config-file", type=str, default="looker.ini", help=argparse.SUPPRESS
+    )
+    parser.add_argument("--section", type=str, default="Looker", help=argparse.SUPPRESS)
+
+
+def parse_input(parser: argparse.ArgumentParser):
     args = vars(parser.parse_args())
-    _args = {}
-    for key, value in args.items():
-        if key == 'client_secret':
-            _args[key] = '[FILTERED]'
-        else:
-            _args[key] = value
-    logger.info('Parsing args, %s', _args)
-
-    if not args['command']:
-        print('usage:', parser.usage)
-        print('\nNo command specified. Try `henry --help` for help.')
-        sys.exit(1)
-    auth_params = ('host', 'port', 'client_id', 'client_secret',
-                   'alias', 'path')
-    auth_args = {k: args[k] for k in auth_params}
-
-    # authenticate
-    if args['command'] != 'pulse':
-        cmd = args['command']+' '+args['which']
-    else:
-        cmd = args['command']
-    session_info = f'Henry v{pkg.__version__}: cmd={cmd}' \
-                   f', sid=#{uuid.uuid1()}'
-    looker = authenticate(timeout, session_info, config_path, **auth_args)
-
-    # map subcommand to function
-    if args['command'] in ('analyze', 'vacuum'):
-        if args['which'] is None:
-            parser.error("No command")
-        else:
-            with Spinner():
-                if args['command'] == 'analyze':
-                    analyze = Analyze(looker)
-                    result = analyze.analyze(**args)
-                else:
-                    vacuum = Vacuum(looker)
-                    result = vacuum.vacuum(**args)
-        # print results if --silence flag is not used
-        if not args['quiet']:
-            # tabulate result and print
-            tablefmt = 'plain' if args['plain'] else 'psql'
-            headers = 'keys'
-            formatted_result = tabulate(result, headers=headers,
-                                        tablefmt=tablefmt, numalign='center')
-            print(formatted_result)
-
-    elif args['command'] == 'pulse':
-                pulse = Pulse(looker)
-                result = pulse.run_all()
-    else:
-        print('No command passed')
-
-    # save to file if --output flag is used
-    if args['output']:
-        file = args['output']
-        logger.info(f'Saving results to {file}')
-        dc.save_to_file(args['output'], result)
-        logger.info('Results succesfully saved.')
+    return fetcher.Input(**args)
 
 
 if __name__ == "__main__":

@@ -1,353 +1,172 @@
-import logging
-import re
-import requests
+import json
 from textwrap import fill
-from tqdm import tqdm
-from tabulate import tabulate
-from tqdm import trange
-from henry.modules.color import color
+from typing import Sequence, cast
+
+from looker_sdk import models
+
+from henry.modules import exceptions, fetcher, spinner
 
 
-class Pulse(object):
+class Pulse(fetcher.Fetcher):
+    """Runs a number of checks against a given Looker instance to determine
+    overall health.
+    """
 
-    postfix_default = [dict(value="RUNNING")]
+    @classmethod
+    def run(cls, user_input: fetcher.Input):
+        pulse = cls(user_input)
+        pulse.check_db_connections()
+        pulse.check_dashboard_performance()
+        pulse.check_dashboard_errors()
+        pulse.check_explore_performance()
+        pulse.check_schedule_failures()
+        pulse.check_legacy_features()
 
-    def __init__(self, looker):
-        self.looker = looker
-        self.pulse_logger = logging.getLogger('pulse')
-        self.bar = '%s%s{postfix[0][value]}%s {desc}: ' \
-                   '{percentage:3.0f}%% |{bar}|[{elapsed}<' \
-                   '{remaining}]' % (color.BOLD,
-                                     color.GREEN,
-                                     color.ENDC)
-        self.postfix_default = [dict(value="RUNNING")]
+    @spinner.Spinner()
+    def check_db_connections(self):
+        """Gets all db connections and runs all supported tests against them.
+        """
+        print("\bTest 1/6: Checking connections")
 
-    def run_all(self):
-        self.pulse_logger.info('Checking instance pulse')
-        self.pulse_logger.info('Checking Connections')
-        result = self.check_connections()
-        print(result, end='\n\n')
-        self.pulse_logger.info('Complete: Checking Connections')
+        reserved_names = ["looker__internal__analytics", "looker"]
+        db_connections: Sequence[models.DBConnection] = list(
+            filter(lambda c: c.name not in reserved_names, self.sdk.all_connections())
+        )
 
-        self.pulse_logger.info('Analyzing Query Stats')
-        r1, r2, r3 = self.check_query_stats()
-        print(r1)
-        print(r2)
-        print(r3, end='\n\n')
-        self.pulse_logger.info('Complete: Analyzing Query Stats')
+        if not db_connections:
+            raise exceptions.NotFoundError("No connections found.")
 
-        # check scheduled plans
-        self.pulse_logger.info('Analyzing Query Stats')
-        with trange(1, desc='(3/5) Analyzing Scheduled Plans',
-                    bar_format=self.bar, postfix=self.postfix_default,
-                    ncols=100, miniters=0) as t:
-            for i in t:
-                result = self.check_scheduled_plans()
-                fail_flag = 0
-                if type(result) == list and len(result) > 0:
-                    if result[0]['failure'] > 0:
-                        fail_flag = 1
-                    result = tabulate(result, headers="keys",
-                                      tablefmt='psql', numalign='center')
-                t.postfix[0]["value"] = 'DONE'
-                t.update()
-        print(result, end='\n\n')
-        if fail_flag == 1:
-            print('Navigate to /admin/scheduled_jobs on your instance for '
-                  'more details', end='\n\n')
-        self.pulse_logger.info('Complete: Analyzing Scheduled Plans')
+        formatted_results = []
+        for connection in db_connections:
+            assert connection.dialect
+            assert isinstance(connection.name, str)
+            resp = self.sdk.test_connection(
+                connection.name,
+                models.DelimSequence(connection.dialect.connection_tests),
+            )
+            results = list(filter(lambda r: r.status == "error", resp))
+            errors = [f"- {fill(cast(str, e.message), width=100)}" for e in results]
 
-        # check enabled legacy features
-        self.pulse_logger.info('Checking Legacy Features')
-        with trange(1, desc='(4/5) Legacy Features', bar_format=self.bar,
-                    postfix=self.postfix_default, ncols=100, miniters=0) as t:
-            for i in t:
-                result = self.check_legacy_features()
-                t.postfix[0]["value"] = 'DONE'
-                t.update()
-        print(result, end='\n\n')
-        self.pulse_logger.info('Complete: Checking Legacy Features')
+            resp = self.sdk.run_inline_query(
+                "json",
+                models.WriteQuery(
+                    model="i__looker",
+                    view="history",
+                    fields=["history.query_run_count"],
+                    filters={"history.connection_name": connection.name},
+                    limit="1",
+                ),
+            )
+            query_run_count = json.loads(resp)[0]["history.query_run_count"]
 
-        # check looker version
-        self.pulse_logger.info('Checking Version')
-        t = trange(1, desc='(5/5) Version', bar_format=self.bar,
-                   postfix=self.postfix_default, ncols=100)
-        for i in t:
-            result = self.check_version()
-            t.postfix[0]["value"] = "DONE"
-            t.update()
-        print(result, end='\n\n')
-        self.pulse_logger.info('Complete: Checking Version')
-        self.pulse_logger.info('Complete: Checking instance pulse')
+            formatted_results.append(
+                {
+                    "Connection": connection.name,
+                    "Status": "OK" if not errors else "\n".join(errors),
+                    "Query Count": query_run_count,
+                }
+            )
+        self._tabularize_and_print(formatted_results)
 
-        return
-
-    def check_connections(self):
-        result = []
-        connections = []
-        for c in self.looker.get_connections():
-            if c['name'] != 'looker':
-                c_tests = (', ').join(c['dialect']['connection_tests'])
-                c_name = c['name']
-                connections.append((c_name, c_tests))
-
-        with tqdm(total=len(connections), desc='(1/5) Testing Connections',
-                  bar_format=self.bar, postfix=self.postfix_default,
-                  ncols=100, miniters=0) as t:
-            for idx, (c, tests) in enumerate(connections):
-                tests = {'tests': tests}
-                results = self.looker.test_connection(c, tests)
-                formatted_results = []
-                fail_flag = 0
-                for i in results:
-                    if i['status'] == 'error':
-                        formatted_results.append('-- ' + fill(i['message'],
-                                                              width=100))
-                        fail_flag = 1
-                formatted_results = list(set(formatted_results))
-                status = '\n'.join(formatted_results)
-                result.append({'Connection': c,
-                               'Status': 'OK' if fail_flag == 0 else status})
-                if idx == len(connections) - 1:
-                    t.postfix[0]['value'] = 'DONE'
-                t.update()
-
-        return tabulate(result, headers="keys", tablefmt='psql')
-
-    def check_query_stats(self):
-        # check query stats
-        with trange(3, desc='(2/5) Analyzing Query Stats', bar_format=self.bar,
-                    postfix=self.postfix_default, ncols=100, miniters=0) as t:
-            for i in t:
-                if i == 0:
-                    query_count = self.get_query_type_count()
-                if i == 1:
-                    query_runtime_stats = self.get_query_stats('complete')
-                if i == 2:
-                    slow_queries = self.get_slow_queries(
-                                                 query_runtime_stats['avg']*5)
-                    t.postfix[0]['value'] = 'DONE'
-
-        r1 = '{} queries run, ' \
-             '{} errored, ' \
-             '{} killed'.format(query_count['total'], query_count['errored'],
-                                query_count['killed'])
-        r2 = 'Query Runtime min/avg/max: ' \
-             '{}/{}/{} seconds'.format(query_runtime_stats['min'],
-                                       query_runtime_stats['avg'],
-                                       query_runtime_stats['max'])
-
-        if slow_queries:
-            r3 = 'Query IDs for queries that took more than 5x the average ' \
-                 'query runtime : {}'.format(slow_queries)
-            r3 = fill(r3, width=80)
-        else:
-            r3 = 'No abnormally slow queries found'
-        return r1, r2, r3
-
-    # get number of queries run, killed, completed, errored, queued
-    def get_slow_queries(self, avg_runtime):
-        body = {
-            "model": "i__looker",
-            "view": "history",
-            "fields": [
-                "query.id",
-            ],
-            "filters": {
-                "query.id": "NOT NULL",
-                "history.created_date": "30 days",
-                "history.status": "-NULL",
-                "history.result_source": "query",
-                "query.model": "-i^_^_looker",
-                "history.total_runtime": ">=" + str(avg_runtime)
+    @spinner.Spinner()
+    def check_dashboard_performance(self):
+        """Prints a list of dashboards with slow running queries in the past
+        7 days"""
+        print(
+            "\bTest 2/6: Checking for dashboards with queries slower than "
+            "30 seconds in the last 7 days"
+        )
+        request = models.WriteQuery(
+            model="i__looker",
+            view="history",
+            fields=["dashboard.title, query.count"],
+            filters={
+                "history.created_date": "7 days",
+                "history.real_dash_id": "-NULL",
+                "history.runtime": ">30",
+                "history.status": "complete",
             },
-            "sorts": [
-                "query.id asc"
-            ],
-            "limit": "50000"
-        }
+            sorts=["query.count desc"],
+            limit=20,
+        )
+        resp = self.sdk.run_inline_query("json", request)
+        slowest_dashboards = json.loads(resp)
+        self._tabularize_and_print(slowest_dashboards)
 
-        r = self.looker.run_inline_query(result_format="json", body=body,
-                                         fields={"cache": "false"})
-
-        if r:
-            ids = (', ').join([str(query['query.id']) for query in r])
-        else:
-            ids = None
-        return ids
-
-    # get number of queries run, killed, completed, errored, queued
-    def get_query_type_count(self):
-        body = {
-            "model": "i__looker",
-            "view": "history",
-            "fields": [
-                "history.query_run_count",
-                "history.status",
-                "history.created_date"
-            ],
-            "pivots": [
-                "history.status"
-            ],
-            "filters": {
-                "history.created_date": "30 days",
-                "history.status": "-NULL",
-                "history.result_source": "query",
-                "query.model": "-i^_^_looker"
+    @spinner.Spinner()
+    def check_dashboard_errors(self):
+        """Prints a list of erroring dashboard queries."""
+        print(
+            "\bTest 3/6: Checking for dashboards with erroring queries in the last 7 days"  # noqa: B950
+        )
+        request = models.WriteQuery(
+            model="i__looker",
+            view="history",
+            fields=["dashboard.title", "history.query_run_count"],
+            filters={
+                "dashboard.title": "-NULL",
+                "history.created_date": "7 days",
+                "history.dashboard_session": "-NULL",
+                "history.status": "error",
             },
-            "sorts": [
-                "history.created_date desc",
-                "history.result_source"
-            ],
-            "limit": "50000"
-        }
+            sorts=["history.query_run_ount desc"],
+            limit=20,
+        )
+        resp = self.sdk.run_inline_query("json", request)
+        erroring_dashboards = json.loads(resp)
+        self._tabularize_and_print(erroring_dashboards)
 
-        r = self.looker.run_inline_query(result_format="json", body=body,
-                                         fields={"cache": "false"})
-        completed = 0
-        errored = 0
-        killed = 0
-        queued = 0
-        if(len(r) > 0):
-            for entry in r:
-                e = entry['history.query_run_count']['history.status']
-                if 'complete' in e:
-                    c_i = e['complete']
-                else:
-                    c_i = 0
-                c_i = c_i if c_i is not None else 0
-                completed += c_i
-
-                if 'error' in e:
-                    e_i = e['error']
-                else:
-                    e_i = 0
-                e_i = e_i if e_i is not None else 0
-                errored += e_i
-
-                if 'killed' in e:
-                    k_i = e['killed']
-                else:
-                    k_i = 0
-                k_i = k_i if k_i is not None else 0
-                killed += k_i
-
-                if 'pending' in e:
-                    q_i = e['pending']
-                else:
-                    q_i = 0
-                q_i = q_i if q_i is not None else 0
-                queued += q_i
-
-        response = {'total': completed + errored + killed,
-                    'completed': completed,
-                    'errored': errored,
-                    'killed': killed,
-                    'queued': queued}
-
-        return response
-
-    # get number of queries run, killed, completed, errored, queued
-    def get_query_stats(self, status):
-        valid_statuses = ['error', 'complete', 'running']
-        if status not in valid_statuses:
-            raise ValueError("Invalid query status, must be in %r"
-                             % valid_statuses)
-        body = {
-            "model": "i__looker",
-            "view": "history",
-            "fields": [
-                "history.min_runtime",
-                "history.max_runtime",
-                "history.average_runtime",
-                "history.total_runtime"
-            ],
-            "filters": {
-                "history.created_date": "30 days",
-                "history.status": status,
-                "query.model": "-i^_^_looker"
+    @spinner.Spinner()
+    def check_explore_performance(self):
+        """Prints a list of the slowest running explores."""
+        print("\bTest 4/6: Checking for the slowest explores in the past 7 days")
+        request = models.WriteQuery(
+            model="i__looker",
+            view="history",
+            fields=["query.model", "query.view", "history.average_runtime"],
+            filters={
+                "history.created_date": "7 days",
+                "query.model": "-NULL, -system^_^_activity",
             },
-            "limit": "50000"
-        }
+            sorts=["history.average_runtime desc"],
+            limit=20,
+        )
+        resp = self.sdk.run_inline_query("json", request)
+        slowest_explores = json.loads(resp)
 
-        r = self.looker.run_inline_query(result_format="json", body=body,
-                                         fields={"cache": "false"})[0]
-        for i in ('history.min_runtime',
-                  'history.max_runtime',
-                  'history.average_runtime'):
-            if r[i] is not None:
-                r[i] = round(r[i], 2)
-            else:
-                r[i] = '-'
-        response = {'min': r['history.min_runtime'],
-                    'max': r['history.max_runtime'],
-                    'avg': r['history.average_runtime'],
-                    'total': r['history.total_runtime']}
+        request.fields = ["history.average_runtime"]
+        resp = json.loads(self.sdk.run_inline_query("json", request))
+        avg_query_runtime = resp[0]["history.average_runtime"]
+        if avg_query_runtime:
+            print(
+                f"\bFor context, the average query runtime is {avg_query_runtime:.4f}s"
+            )
 
-        return response
+        self._tabularize_and_print(slowest_explores)
 
-    def check_scheduled_plans(self):
-        body = {
-            "model": "i__looker",
-            "view": "scheduled_plan",
-            "fields": ["scheduled_job.status", "scheduled_job.count"],
-            "pivots": ["scheduled_job.status"],
-            "filters": {
-                    "scheduled_plan.run_once": "no",
-                    "scheduled_job.status": "-NULL",
-                    "scheduled_job.created_date": "30 days"
+    @spinner.Spinner()
+    def check_schedule_failures(self):
+        """Prints a list of schedules that have failed in the past 7 days."""
+        print("\bTest 5/6: Checking for failing schedules")
+        request = models.WriteQuery(
+            model="i__looker",
+            view="scheduled_plan",
+            fields=["scheduled_job.name", "scheduled_job.count"],
+            filters={
+                "scheduled_job.created_date": "7 days",
+                "scheduled_job.status": "failure",
             },
-            "limit": "50000"
-        }
+            sorts=["scheduled_job.count desc"],
+            limit=500,
+        )
+        result = self.sdk.run_inline_query("json", request)
+        failed_schedules = json.loads(result)
+        self._tabularize_and_print(failed_schedules)
 
-        r = self.looker.run_inline_query("json", body)
-        result = []
-        if r:
-            r = r[0]['scheduled_job.count']['scheduled_job.status']
-            failed = r['failure'] if 'failure' in r.keys() else 0
-            succeeded = r['success'] if 'success' in r.keys() else 0
-            result.append({'total': failed + succeeded,
-                           'failure': failed,
-                           'success': succeeded})
-            return result
-        else:
-            return "No Plans Found"
-
-    def check_integrations(self):
-        response = self.looker.get_integrations()
-        integrations = []
-        for r in response:
-            if r['enabled']:
-                integrations.append(r['label'])
-
-        result = None if len(integrations) == 0 else integrations
-
-        return result
-
+    @spinner.Spinner()
     def check_legacy_features(self):
-        response = self.looker.get_legacy_features()
-        _result = []
-        for r in response:
-            if r['enabled'] is True:
-                _result.append({'Legacy Features': r['name']})
-
-        if _result:
-            result = tabulate(_result, headers="keys", tablefmt='psql')
-        else:
-            result = 'No legacy features found'
-        return result
-
-    def check_version(self):
-        _v = self.looker.get_version()['looker_release_version']
-        version = re.findall(r'(\d.\d+)', _v)[0]
-        session = requests.Session()
-        _lv = session.get('https://learn.looker.com:19999/versions').json()
-        _lv = _lv['looker_release_version']
-        latest_version = re.findall(r'(\d.\d+)', _lv)[0]
-        if version == latest_version:
-            result = '{} ({})'.format(version, 'up-to-date')
-        else:
-            result = '{} ({} {})'.format(version,
-                                         'outdated, latest version is',
-                                         latest_version)
-        return result
+        """Prints a list of enabled legacy features."""
+        print("\bTest 6/6: Checking for enabled legacy features")
+        lf = list(filter(lambda f: f.enabled, self.sdk.all_legacy_features()))
+        legacy_features = [{"Feature": cast(str, f.name)} for f in lf]
+        self._tabularize_and_print(legacy_features)
