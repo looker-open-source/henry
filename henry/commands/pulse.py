@@ -1,12 +1,10 @@
 import json
 from textwrap import fill
-from typing import cast, Sequence
+from typing import Sequence, cast
 
 from looker_sdk import models
 
-from henry.modules import exceptions
-from henry.modules import fetcher
-from henry.modules import spinner
+from henry.modules import exceptions, fetcher, spinner
 
 
 class Pulse(fetcher.Fetcher):
@@ -29,6 +27,7 @@ class Pulse(fetcher.Fetcher):
         """Gets all db connections and runs all supported tests against them.
         """
         print("\bTest 1/6: Checking connections")
+
         reserved_names = ["looker__internal__analytics", "looker"]
         db_connections: Sequence[models.DBConnection] = list(
             filter(lambda c: c.name not in reserved_names, self.sdk.all_connections())
@@ -51,7 +50,7 @@ class Pulse(fetcher.Fetcher):
             resp = self.sdk.run_inline_query(
                 "json",
                 models.WriteQuery(
-                    model="system__activity",
+                    model="i__looker",
                     view="history",
                     fields=["history.query_run_count"],
                     filters={"history.connection_name": connection.name},
@@ -78,22 +77,18 @@ class Pulse(fetcher.Fetcher):
             "30 seconds in the last 7 days"
         )
         request = models.WriteQuery(
-            model="system__activity",
-            view="scheduled_plan",
+            model="i__looker",
+            view="history",
             fields=["dashboard.title, query.count"],
             filters={
-                "dashboard.title": "-NULL",
                 "history.created_date": "7 days",
-                "history.is_single_query": "Yes",
                 "history.real_dash_id": "-NULL",
                 "history.runtime": ">30",
                 "history.status": "complete",
-                "query.count": ">0",
             },
             sorts=["query.count desc"],
             limit=20,
         )
-
         resp = self.sdk.run_inline_query("json", request)
         slowest_dashboards = json.loads(resp)
         self._tabularize_and_print(slowest_dashboards)
@@ -105,13 +100,13 @@ class Pulse(fetcher.Fetcher):
             "\bTest 3/6: Checking for dashboards with erroring queries in the last 7 days"  # noqa: B950
         )
         request = models.WriteQuery(
-            model="system__activity",
+            model="i__looker",
             view="history",
             fields=["dashboard.title", "history.query_run_count"],
             filters={
+                "dashboard.title": "-NULL",
                 "history.created_date": "7 days",
                 "history.dashboard_session": "-NULL",
-                "history.is_single_query": "Yes",
                 "history.status": "error",
             },
             sorts=["history.query_run_ount desc"],
@@ -123,10 +118,10 @@ class Pulse(fetcher.Fetcher):
 
     @spinner.Spinner()
     def check_explore_performance(self):
-        """ a list of the slowest running explores."""
+        """Prints a list of the slowest running explores."""
         print("\bTest 4/6: Checking for the slowest explores in the past 7 days")
         request = models.WriteQuery(
-            model="system__activity",
+            model="i__looker",
             view="history",
             fields=["query.model", "query.view", "history.average_runtime"],
             filters={
@@ -154,7 +149,7 @@ class Pulse(fetcher.Fetcher):
         """Prints a list of schedules that have failed in the past 7 days."""
         print("\bTest 5/6: Checking for failing schedules")
         request = models.WriteQuery(
-            model="system__activity",
+            model="i__looker",
             view="scheduled_plan",
             fields=["scheduled_job.name", "scheduled_job.count"],
             filters={
