@@ -1,13 +1,7 @@
-from typing import Dict, MutableSequence, Optional, Union, Sequence
-
-from looker_sdk import models
+from typing import cast, Optional
 
 from henry.modules import spinner
 from henry.modules import fetcher
-from henry.modules import exceptions
-
-
-TResult = fetcher.TResult
 
 
 class Analyze(fetcher.Fetcher):
@@ -22,31 +16,32 @@ class Analyze(fetcher.Fetcher):
             result = analyze.explores(
                 model=user_input.model, explore=user_input.explore
             )
-        analyze.output(data=result)
+        analyze.output(data=cast(fetcher.TResult, result))
 
     @spinner.Spinner()
-    def projects(self, *, id: Optional[str] = None) -> TResult:
+    def projects(self, *, id: Optional[str] = None) -> fetcher.TResult:
         """Analyzes all projects or a specific project."""
-        if id:
-            projects = [self.sdk.project(id)]
-        else:
-            projects = self.sdk.all_projects()
-
-        if not projects:
-            raise exceptions.NotFoundError("No projects found.")
-
+        projects = self.get_projects(project_id=id)
         result = []
         for p in projects:
-            assert isinstance(p.id, str)
+            assert isinstance(p.name, str)
             assert isinstance(p.pull_request_mode, str)
             assert isinstance(p.validation_required, bool)
-            p_files = self.sdk.all_project_files(p.id)
+            p_files = self.sdk.all_project_files(p.name)
+
+            if "/bare_models/" in cast(str, p.git_remote_url):
+                git_connection_test_results = "Bare repo, no tests required"
+            else:
+                git_connection_test_results = self.run_git_connection_tests(
+                    cast(str, p.id)
+                )
+
             result.append(
                 {
-                    "Project Name": p.id,
+                    "Project Name": p.name,
                     "# Models": sum(map(lambda p: p.type == "model", p_files)),
-                    "# Views": sum(map(lambda p: p.type == "view", p_files)),
-                    "Git Connection Status": self.run_git_connection_tests(p.id),
+                    "# View Files": sum(map(lambda p: p.type == "view", p_files)),
+                    "Git Connection Status": git_connection_test_results,
                     "PR Mode": p.pull_request_mode,
                     "Is Validation Required": p.validation_required,
                 }
@@ -56,10 +51,10 @@ class Analyze(fetcher.Fetcher):
     @spinner.Spinner()
     def models(
         self, *, project: Optional[str] = None, model: Optional[str] = None
-    ) -> TResult:
+    ) -> fetcher.TResult:
         """Analyze models, can optionally filter by project or model."""
         all_models = self.get_models(project=project, model=model)
-        result: MutableSequence[Dict[str, Union[str, int]]] = []
+        result: fetcher.TResult = []
         for m in all_models:
             assert isinstance(m.name, str)
             assert isinstance(m.project_name, str)
@@ -78,7 +73,7 @@ class Analyze(fetcher.Fetcher):
     @spinner.Spinner()
     def explores(
         self, *, model: Optional[str] = None, explore: Optional[str] = None
-    ) -> TResult:
+    ) -> fetcher.TResult:
         """Analyze explores."""
         all_explores = self.get_explores(model=model, explore=explore)
         result: fetcher.TResult = []
@@ -93,7 +88,7 @@ class Analyze(fetcher.Fetcher):
                     "Model": e.model_name,
                     "Explore": e.name,
                     "Is Hidden": e.hidden,
-                    "Has Description": "Yes" if e.description else "No",
+                    "Has Description": True if e.description else False,
                     "# Joins": len(join_stats),
                     "# Unused Joins": len(self._filter(join_stats)),
                     "# Fields": len(field_stats),
