@@ -105,7 +105,7 @@ class Fetcher:
             if project:
                 # .lower() is used so behavior is consistent with /project endpoint
                 ml = list(
-                    filter(lambda m: m.project_name.lower() == project.lower(), ml,)
+                    filter(lambda m: m.project_name.lower() == project.lower(), ml,)  # type: ignore
                 )
             ml = list(filter(lambda m: cast(bool, m.has_content), ml))
         return ml
@@ -200,14 +200,9 @@ class Fetcher:
 
     def get_explore_fields(self, explore: models.LookmlModelExplore) -> Sequence[str]:
         """Return a list of non hidden fields for a given explore"""
-        # TODO: filters. Conditional/Always filters don't need to be added separately
-        # because they are required to be in the field list. What about filter only
-        # fields?
         fields = explore.fields
-        assert fields
-        assert fields.dimensions and fields.measures
-        dimensions = [cast(str, f.name) for f in fields.dimensions if not f.hidden]
-        measures = [cast(str, f.name) for f in fields.measures if not f.hidden]
+        dimensions = [cast(str, f.name) for f in fields.dimensions if not f.hidden]  # type: ignore
+        measures = [cast(str, f.name) for f in fields.measures if not f.hidden]  # type: ignore
         result = sorted(list(set([*dimensions, *measures])))
         return result
 
