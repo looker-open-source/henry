@@ -25,6 +25,10 @@ explore: unused_explore_with_only_dimensions {
   from: dimensions_only
 }
 
+explore: unused_explore_with_only_measures {
+  from: measures_only
+  description: "Measure only explore"
+}
 
 # Used
 explore: explore_2_joins_all_used {

@@ -35,3 +35,8 @@ view: dimensions_only {
   dimension: d1 {}
   dimension: d2 {}
 }
+
+view: measures_only {
+  measure: m1 {}
+  measure: m2 {}
+}
