@@ -105,7 +105,7 @@ class Fetcher:
             if project:
                 # .lower() is used so behavior is consistent with /project endpoint
                 ml = list(
-                    filter(lambda m: m.project_name.lower() == project.lower(), ml,)  # type: ignore
+                    filter(lambda m: m.project_name.lower() == project.lower(), ml,)  # type: ignore  # noqa: B950
                 )
             ml = list(filter(lambda m: cast(bool, m.has_content), ml))
         return ml
@@ -201,8 +201,8 @@ class Fetcher:
     def get_explore_fields(self, explore: models.LookmlModelExplore) -> Sequence[str]:
         """Return a list of non hidden fields for a given explore"""
         fields = explore.fields
-        dimensions = [cast(str, f.name) for f in fields.dimensions if not f.hidden]  # type: ignore
-        measures = [cast(str, f.name) for f in fields.measures if not f.hidden]  # type: ignore
+        dimensions = [cast(str, f.name) for f in fields.dimensions if not f.hidden]  # type: ignore  # noqa: B950
+        measures = [cast(str, f.name) for f in fields.measures if not f.hidden]  # type: ignore  # noqa B950
         result = sorted(list(set([*dimensions, *measures])))
         return result
 
@@ -249,10 +249,11 @@ class Fetcher:
                     used_fields[f] = row["history.query_run_count"]
                 recorded.append(f)
 
-            # A field used as a filter in a query is not listed in query.formatted_fields,
-            # BUT if the field is used as both a filter and a dimension/measure, it's listed in both
-            # query.formatted_fields and query.formatted_filters. The recorded variable keeps track of this, so
-            # that no double counting occurs.
+            # A field used as a filter in a query is not listed in
+            # query.formatted_fields BUT if the field is used as both a filter
+            # and a dimension/measure, it's listed in both query.formatted_fields
+            # and query.formatted_filters. The recorded variable keeps track of
+            # this, so that no double counting occurs.
             filters = row["query.formatted_filters"]
             if filters:
                 parsed_filters = re.findall(r"(\w+\.\w+)+", filters)

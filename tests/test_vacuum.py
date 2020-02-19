@@ -97,7 +97,9 @@ def test_vacuum_explores_filters(
 def test_vacuum_explores_vacuums(
     vacuum: vacuum.Vacuum, test_model, test_explore, test_explores_stats,
 ):
-    """vacuum.explores() should return the unused joins and fields for a given explore."""
+    """vacuum.explores() should return the unused joins and fields for a given
+    explore.
+    """
     result = vacuum.explores(model=test_model["name"], explore=test_explore)
     assert isinstance(result, list)
     assert len(result) == 1
