@@ -131,12 +131,14 @@ def test_get_explores_throws_if_model_or_explore_does_not_exist(
 
 
 def test_get_used_explores(fc: fetcher.Fetcher, test_model, test_used_explore_names):
+    """fetcher.get_used_explores() should return all used explores."""
     used_explores = fc.get_used_explores(model=test_model["name"])
     assert isinstance(used_explores, dict)
     assert all(e in test_used_explore_names for e in used_explores)
 
 
 def test_get_unused_explores(fc: fetcher.Fetcher, test_model, test_unused_explores):
+    """fetcher.get_unused_explores() should return all unused explores."""
     unused_explores = fc.get_unused_explores(model=test_model["name"])
     assert all(e in test_unused_explores for e in unused_explores)
 
@@ -144,6 +146,7 @@ def test_get_unused_explores(fc: fetcher.Fetcher, test_model, test_unused_explor
 def test_get_explore_fields_gets_fields(
     fc: fetcher.Fetcher, test_model, test_explores_stats
 ):
+    """fetcher.get_explore_fields() should return an explores fields."""
     test_explore = test_explores_stats[0]
     explore = fc.get_explores(model=test_model["name"], explore=test_explore["name"])
     assert isinstance(explore, list)
@@ -156,21 +159,21 @@ def test_get_explore_fields_gets_fields(
     assert fields == test_explore["all_fields"]
 
 
-def test_get_explore_fields_gets_fields_for_dimension_only_explores(
-    fc: fetcher.Fetcher, test_model, test_dimension_only_explore
+def test_get_explore_fields_gets_fields_for_dimension_or_measure_only_explores(
+    fc: fetcher.Fetcher, test_model, test_dimensions_or_measures_only_explores
 ):
-    """fetcher.get_explore_fields() should return when an explore has only dimensions."""
-    explore = fc.get_explores(
-        model=test_model["name"], explore=test_dimension_only_explore["name"]
-    )
+    """fetcher.get_explore_fields() should return when an explore has only dimensions
+    or only measures.
+    """
+    expected = test_dimensions_or_measures_only_explores[0]
+    explore = fc.get_explores(model=test_model["name"], explore=expected["name"])
     assert isinstance(explore, list)
-    explore = explore[0]
-    assert explore.name == test_dimension_only_explore["name"]
-    assert explore.fields.dimensions
-    assert not explore.fields.measures
-    expected = [f["name"] for f in test_dimension_only_explore["fields"]]
-    actual = fc.get_explore_fields(explore)
-    assert actual == expected
+    actual = explore[0]
+    assert actual.name == expected["name"]
+    assert not (actual.fields.dimensions and actual.fields.measures)
+    expected_fields = [f["name"] for f in expected["fields"]]
+    actual_fields = fc.get_explore_fields(actual)
+    assert actual_fields == expected_fields
 
 
 def test_get_explore_field_stats(
@@ -180,6 +183,9 @@ def test_get_explore_field_stats(
     test_used_explore_names,
     test_explores_stats,
 ):
+    """fetcher.get_explore_field_stats() should get the stats of all fields in
+    an explore.
+    """
     explore = fc.get_explores(
         model=test_model["name"], explore=test_used_explore_names[0]
     )[0]
@@ -195,6 +201,9 @@ def test_get_explore_field_stats(
 
 
 def test_get_explore_join_stats(fc: fetcher.Fetcher, test_model):
+    """fetcher.get_explore_join_stats() should return the stats of all joins in
+    an explore.
+    """
     explore = fc.get_explores(
         model=test_model["name"], explore="explore_2_joins_1_used"
     )[0]
