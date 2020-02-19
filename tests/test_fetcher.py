@@ -156,6 +156,23 @@ def test_get_explore_fields_gets_fields(
     assert fields == test_explore["all_fields"]
 
 
+def test_get_explore_fields_gets_fields_for_dimension_only_explores(
+    fc: fetcher.Fetcher, test_model, test_dimension_only_explore
+):
+    """fetcher.get_explore_fields() should return when an explore has only dimensions."""
+    explore = fc.get_explores(
+        model=test_model["name"], explore=test_dimension_only_explore["name"]
+    )
+    assert isinstance(explore, list)
+    explore = explore[0]
+    assert explore.name == test_dimension_only_explore["name"]
+    assert explore.fields.dimensions
+    assert not explore.fields.measures
+    expected = [f["name"] for f in test_dimension_only_explore["fields"]]
+    actual = fc.get_explore_fields(explore)
+    assert actual == expected
+
+
 def test_get_explore_field_stats(
     fc: fetcher.Fetcher,
     looker_sdk: methods.LookerSDK,

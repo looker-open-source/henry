@@ -21,6 +21,10 @@ explore: unused_explore_2_joins {
   }
 }
 
+explore: unused_explore_with_only_dimensions {
+  from: dimensions_only
+}
+
 
 # Used
 explore: explore_2_joins_all_used {
