@@ -40,6 +40,13 @@ def test_unused_explores(test_model):
     return sorted(explores)
 
 
+@pytest.fixture(scope="session")
+def test_dimension_only_explore(test_model):
+    for e in test_model["explores"]:
+        if e.get("dimensions_only", False):
+            return e
+
+
 def used_fields(explore):
     if explore.get("unused", False):
         used_fields = ""

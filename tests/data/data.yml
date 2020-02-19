@@ -4,8 +4,8 @@ model:
   unused: false
   explores:
     - name: "explore_2_joins_all_used"
-      description: True
-      hidden: False
+      description: true
+      hidden: false
       joins:
         - name: join1
         - name: join2
@@ -26,8 +26,8 @@ model:
           value: "complete"
         - name: "join2.m1"
     - name: "explore_2_joins_1_used"
-      description: False
-      hidden: False
+      description: false
+      hidden: false
       joins:
         - name: join1
         - name: join2
@@ -62,8 +62,8 @@ model:
         - name: "unused_explore_no_joins.m1"
     - name: "unused_explore_2_joins"
       unused: true
-      description: False
-      hidden: False
+      description: false
+      hidden: false
       joins:
         - name: join1
           unused: true
@@ -83,6 +83,13 @@ model:
         - name: "join2.d3"
         - name: "join2.d4"
         - name: "join2.m1"
+    - name: "unused_explore_with_only_dimensions"
+      dimensions_only: true
+      unused: true
+      description: true
+      fields:
+        - name: "unused_explore_with_only_dimensions.d1"
+        - name: "unused_explore_with_only_dimensions.d2"
 unused_model:
   name: henry_dusty
   unused: true
