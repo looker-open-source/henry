@@ -41,10 +41,24 @@ def test_unused_explores(test_model):
 
 
 @pytest.fixture(scope="session")
-def test_dimension_only_explore(test_model):
+def _dimensions_or_measures_only_explores(test_model):
+    explores = []
     for e in test_model["explores"]:
-        if e.get("dimensions_only", False):
-            return e
+        if e.get("dimensions_only", False) or e.get("measures_only", False):
+            explores.append(e)
+    return explores
+
+
+@pytest.fixture(params=["dimensions_only", "measures_only"])
+def test_dimensions_or_measures_only_explores(
+    request, _dimensions_or_measures_only_explores
+):
+    return list(
+        filter(
+            lambda e: e.get(request.param, False),
+            _dimensions_or_measures_only_explores,
+        )
+    )
 
 
 def used_fields(explore):
