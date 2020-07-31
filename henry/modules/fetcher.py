@@ -183,7 +183,7 @@ class Fetcher:
         )
         _results: MutableSequence[Dict[str, int]] = json.loads(resp)
         results = {
-            cast(str, r["query.view"]): r["history.query_run_count"] for r in _results
+            cast(str, r["query.view"].lower()): r["history.query_run_count"] for r in _results
         }
         return results
 

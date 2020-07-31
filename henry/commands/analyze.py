@@ -95,7 +95,7 @@ class Analyze(fetcher.Fetcher):
                     "# Unused Fields": len(self._filter(field_stats)),
                     "Query Count": self.get_used_explores(
                         model=e.model_name, explore=e.name
-                    ).get(e.name, 0),
+                    ).get(e.name.lower(), 0),
                 }
             )
         return result
