@@ -105,11 +105,11 @@ By default, API calls have a timeout of 120 seconds. This can be overriden using
 
 #### Output to File
 
-If the `--save` flag is used the tool saves the results to your current working directory. Example usage:
+If the `--output <FILE-NAME>` flag is used the tool saves the results to your current working directory. Example usage:
 
-    $ henry vacuum models --save
+    $ henry vacuum models --output myfilename
 
-saves the results in _vacuum_models\_{date}\_{time}.csv_ in the current working directory.
+saves the results in _myfilename.csv_ in the current working directory.
 
 <a name="pulse_cmd"></a>
 
