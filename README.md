@@ -4,6 +4,8 @@
 
 # Henry: A Looker Cleanup Tool
 
+> To use Henry in Python, see [Henry API docs](PYTHONAPI_DOCS.md).
+
 Henry is a command line tool that helps determine model bloat in your Looker instance and identify unused content in models and explores. It is meant to help developers cleanup models from unused explores and explores from unused joins and fields, as well as maintain a healthy and user-friendly instance.
 
 ## Table of Contents
