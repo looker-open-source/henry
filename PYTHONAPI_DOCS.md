@@ -53,6 +53,16 @@ h.looker.get_legacy_features(     h.looker.get_version(             h.looker.sec
 h.looker.get_model(               h.looker.git_connection_tests(    h.looker.session
 ```
 ```python
+>>> h.pulse.*
+h.pulse.bar                    h.pulse.get_query_stats(
+h.pulse.check_connections(     h.pulse.get_query_type_count(
+h.pulse.check_integrations(    h.pulse.get_slow_queries(
+h.pulse.check_legacy_features( h.pulse.looker
+h.pulse.check_query_stats(     h.pulse.postfix_default
+h.pulse.check_scheduled_plans( h.pulse.pulse_logger
+h.pulse.check_version(         h.pulse.run_all(
+```
+```python
 >>> h.analyzer.*
 h.analyzer.analyze(                 h.analyzer.get_explores(            h.analyzer.get_used_explore_fields( h.analyzer.test_git_connection(
 h.analyzer.analyze_logger           h.analyzer.get_models(              h.analyzer.get_used_explores(
