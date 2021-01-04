@@ -26,17 +26,12 @@ class Looker:
 
         return LookerApi(**kwargs)
 
-    def sdk(**kwargs):
-        """TODO connect to looker_sdk and/or interface"""
-        pass
-
 
 class Henry:
     def __init__(self, **creds):
         self.args = _DEFAULTS
         self.args.update(**creds)
 
-        self.sdk = Looker.sdk(**creds)  # looker_sdk interface to Looker
         self.api = Looker.henry_api(**creds)  # Henry interface to Looker
 
     def _update_args(self, **kwargs) -> dict:
