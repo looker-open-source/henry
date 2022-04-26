@@ -18,8 +18,6 @@ autopep8 = "*"
 [packages]
 looker-sdk = ">=21"
 tabulate = "*"
-henry = {editable = true, path = "."}
-types-tabulate = "*"
 
 [pipenv]
 allow_prereleases = true
