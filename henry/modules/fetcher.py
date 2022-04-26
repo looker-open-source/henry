@@ -26,7 +26,6 @@ from henry.modules import exceptions
 from .. import __version__ as pkg
 
 TResult = MutableSequence[Dict[str, Union[str, int, bool]]]
-API_VERSION = "4.0"
 
 class Fetcher:
     def __init__(self, options: "Input"):
@@ -60,13 +59,14 @@ class Fetcher:
         if timeout:
             settings.timeout = timeout
         transport = requests_transport.RequestsTransport.configure(settings)
+        # 4.0 is hardcoded here due to needing the -40 suffixed methods
         return methods.Looker40SDK(
             auth_session.AuthSession(
-                settings, transport, serialize.deserialize, API_VERSION),
-            serialize.deserialize,
-            serialize.serialize,
+                settings, transport, serialize.deserialize40, "4.0"),
+            serialize.deserialize40,
+            serialize.serialize40,
             transport,
-            API_VERSION,
+            "4.0",
         )
 
     def _verify_api_credentials(self):

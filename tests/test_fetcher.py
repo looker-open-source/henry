@@ -1,7 +1,7 @@
 from typing import Callable, Dict, Optional, Sequence, Tuple, Union
 
 import pytest  # type: ignore
-from looker_sdk import methods, models
+from looker_sdk.sdk.api40 import methods, models
 
 from henry.modules import exceptions, fetcher
 

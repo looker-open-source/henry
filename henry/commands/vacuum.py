@@ -15,7 +15,7 @@ class Vacuum(fetcher.Fetcher):
         vacuum.output(data=cast(fetcher.TResult, result))
 
     @spinner.Spinner()
-    def models(self, *, project: Optional[str] = None, model: str) -> fetcher.TResult:
+    def models(self, *, project: Optional[str] = None, model: Optional[str]) -> fetcher.TResult:
         """Analyze models."""
         all_models = self.get_models(project=project, model=model)
         used_models = self.get_used_models()
