@@ -178,7 +178,7 @@ def test_get_explore_fields_gets_fields_for_dimension_or_measure_only_explores(
 
 def test_get_explore_field_stats(
     fc: fetcher.Fetcher,
-    looker_sdk: methods.LookerSDK,
+    looker_sdk: methods.Looker40SDK,
     test_model,
     test_used_explore_names,
     test_explores_stats,

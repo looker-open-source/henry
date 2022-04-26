@@ -1,7 +1,8 @@
 import yaml
 import pytest  # type: ignore
 
-from looker_sdk import client, methods, models
+from looker_sdk.sdk.api40 import methods, models
+import looker_sdk as client
 
 
 @pytest.fixture(scope="session")
@@ -152,7 +153,7 @@ def test_unused_model_explore_names(test_unused_model_explores):
 
 
 @pytest.fixture(scope="session", autouse=True)
-def run_queries(looker_sdk: methods.LookerSDK, test_model):
+def run_queries(looker_sdk: methods.Looker40SDK, test_model):
     test_model_name = test_model["name"]
     for e in test_model["explores"]:
         if e.get("unused", False):
@@ -184,6 +185,6 @@ def _get_test_data():
 
 
 @pytest.fixture(scope="session")
-def looker_sdk() -> methods.LookerSDK:
-    looker_sdk = client.setup("looker.ini")
+def looker_sdk() -> methods.Looker40SDK:
+    looker_sdk = client.init40("looker.ini")
     return looker_sdk

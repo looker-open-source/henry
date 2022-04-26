@@ -19,7 +19,7 @@ from typing import (
 import tabulate
 from looker_sdk import error
 from looker_sdk.rtl import api_settings, auth_session, requests_transport, serialize
-from looker_sdk.sdk import methods, models
+from looker_sdk.sdk.api40 import methods, models
 
 from henry.modules import exceptions
 
@@ -46,7 +46,7 @@ class Fetcher:
 
     def configure_sdk(
         self, config_file: str, section: str, timeout: Optional[int],
-    ) -> methods.LookerSDK:
+    ) -> methods.Looker40SDK:
         """Instantiates and returns a LookerSDK object and overrides default timeout if
         specified by user.
         """
@@ -58,9 +58,9 @@ class Fetcher:
         }
         if timeout:
             settings.timeout = timeout
-        settings.api_version = "3.1"
+        settings.api_version = "4.0"
         transport = requests_transport.RequestsTransport.configure(settings)
-        return methods.LookerSDK(
+        return methods.Looker40SDK(
             auth_session.AuthSession(settings, transport, serialize.deserialize),
             serialize.deserialize,
             serialize.serialize,
