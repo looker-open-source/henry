@@ -1,4 +1,4 @@
-project: Henry
+project: henry_testing
 model:
   name: henry_qa
   unused: false
