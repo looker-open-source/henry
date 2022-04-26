@@ -1,4 +1,4 @@
-from typing import cast, Optional
+from typing import cast, Optional, List, Any
 
 from henry.modules import spinner
 from henry.modules import fetcher
@@ -22,7 +22,7 @@ class Analyze(fetcher.Fetcher):
     def projects(self, *, id: Optional[str] = None) -> fetcher.TResult:
         """Analyzes all projects or a specific project."""
         projects = self.get_projects(project_id=id)
-        result = []
+        result: List[Any] = []
         for p in projects:
             assert isinstance(p.name, str)
             assert isinstance(p.pull_request_mode, str)

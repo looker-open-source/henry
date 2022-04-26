@@ -26,7 +26,7 @@ from henry.modules import exceptions
 from .. import __version__ as pkg
 
 TResult = MutableSequence[Dict[str, Union[str, int, bool]]]
-
+API_VERSION = "4.0"
 
 class Fetcher:
     def __init__(self, options: "Input"):
@@ -50,7 +50,8 @@ class Fetcher:
         """Instantiates and returns a LookerSDK object and overrides default timeout if
         specified by user.
         """
-        settings = api_settings.ApiSettings.configure(config_file, section)
+        settings = api_settings.ApiSettings(
+            filename=config_file, section=section)
         user_agent_tag = f"Henry v{pkg.__version__}: cmd={self.cmd}, sid={uuid.uuid1()}"
         settings.headers = {
             "Content-Type": "application/json",
@@ -58,13 +59,14 @@ class Fetcher:
         }
         if timeout:
             settings.timeout = timeout
-        settings.api_version = "4.0"
         transport = requests_transport.RequestsTransport.configure(settings)
         return methods.Looker40SDK(
-            auth_session.AuthSession(settings, transport, serialize.deserialize),
+            auth_session.AuthSession(
+                settings, transport, serialize.deserialize, API_VERSION),
             serialize.deserialize,
             serialize.serialize,
             transport,
+            API_VERSION,
         )
 
     def _verify_api_credentials(self):
@@ -80,7 +82,8 @@ class Fetcher:
         """Returns a list of projects."""
         try:
             if project_id:
-                projects = [self.sdk.project(project_id)]
+                projects: Sequence[models.Project] = [
+                    self.sdk.project(project_id)]
             else:
                 projects = self.sdk.all_projects()
         except error.SDKError:
@@ -96,7 +99,8 @@ class Fetcher:
             self.get_projects(project)
         try:
             if model:
-                ml = [self.sdk.lookml_model(model)]
+                ml: Sequence[models.LookmlModel] = [
+                    self.sdk.lookml_model(model)]
             else:
                 ml = self.sdk.all_lookml_models()
         except error.SDKError:
