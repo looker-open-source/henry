@@ -3,6 +3,7 @@ from textwrap import fill
 from typing import Sequence, cast
 
 from looker_sdk import models
+from looker_sdk.error import SDKError
 
 from henry.modules import exceptions, fetcher, spinner
 
@@ -45,8 +46,8 @@ class Pulse(fetcher.Fetcher):
                 models.DelimSequence(connection.dialect.connection_tests),
             )
             results = list(filter(lambda r: r.status == "error", resp))
-            errors = [f"- {fill(cast(str, e.message), width=100)}" for e in results]
-
+            errors = [
+                f"- {fill(cast(str, e.message), width=100)}" for e in results]
             resp = self.sdk.run_inline_query(
                 "json",
                 models.WriteQuery(
