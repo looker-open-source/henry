@@ -1,7 +1,6 @@
 # Looker Credentials
 looker.ini
 .vscode
-Pipfile*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
