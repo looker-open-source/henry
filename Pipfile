@@ -13,7 +13,6 @@ pytest-cov = "*"
 ptipython = "*"
 pyyaml = "*"
 twine = "*"
-autopep8 = "*"
 
 [packages]
 looker-sdk = ">=21"

@@ -25,8 +25,7 @@ class Pulse(fetcher.Fetcher):
 
     @spinner.Spinner()
     def check_db_connections(self):
-        """Gets all db connections and runs all supported tests against them.
-        """
+        """Gets all db connections and runs all supported tests against them."""
         print("\bTest 1/6: Checking connections")
 
         reserved_names = ["looker__internal__analytics", "looker", "looker__ilooker"]
@@ -46,8 +45,7 @@ class Pulse(fetcher.Fetcher):
                 models.DelimSequence(connection.dialect.connection_tests),
             )
             results = list(filter(lambda r: r.status == "error", resp))
-            errors = [
-                f"- {fill(cast(str, e.message), width=100)}" for e in results]
+            errors = [f"- {fill(cast(str, e.message), width=100)}" for e in results]
             resp = self.sdk.run_inline_query(
                 "json",
                 models.WriteQuery(

@@ -2,7 +2,7 @@ import yaml
 import pytest  # type: ignore
 
 from looker_sdk.sdk.api40 import methods, models
-import looker_sdk
+import looker_sdk as client
 
 
 @pytest.fixture(scope="session")
@@ -186,5 +186,5 @@ def _get_test_data():
 
 @pytest.fixture(scope="session")
 def looker_sdk() -> methods.Looker40SDK:
-    looker_sdk = looker_sdk.init40("looker.ini")
+    looker_sdk = client.init40("looker.ini")
     return looker_sdk
