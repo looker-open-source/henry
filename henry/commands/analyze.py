@@ -18,8 +18,7 @@ class Analyze(fetcher.Fetcher):
                 model=user_input.model, explore=user_input.explore
             )
         else:
-          raise ValueError(
-              "Please specify one of 'projects', 'models' or 'explores'")
+            raise ValueError("Please specify one of 'projects', 'models' or 'explores'")
         analyze.output(data=cast(fetcher.TResult, result))
 
     @spinner.Spinner()

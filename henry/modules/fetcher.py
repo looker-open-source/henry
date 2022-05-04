@@ -27,6 +27,7 @@ from .. import __version__ as pkg
 
 TResult = MutableSequence[Dict[str, Union[str, int, bool]]]
 
+
 class Fetcher:
     def __init__(self, options: "Input"):
         self.timeframe = f"{options.timeframe} days" if options.timeframe else "90 days"
@@ -44,13 +45,15 @@ class Fetcher:
         self._verify_api_credentials()
 
     def configure_sdk(
-        self, config_file: str, section: str, timeout: Optional[int],
+        self,
+        config_file: str,
+        section: str,
+        timeout: Optional[int],
     ) -> methods.Looker40SDK:
         """Instantiates and returns a LookerSDK object and overrides default timeout if
         specified by user.
         """
-        settings = api_settings.ApiSettings(
-            filename=config_file, section=section)
+        settings = api_settings.ApiSettings(filename=config_file, section=section)
         user_agent_tag = f"Henry v{pkg.__version__}: cmd={self.cmd}, sid={uuid.uuid1()}"
         settings.headers = {
             "Content-Type": "application/json",
@@ -62,7 +65,8 @@ class Fetcher:
         # 4.0 is hardcoded here due to needing the -40 suffixed methods
         return methods.Looker40SDK(
             auth_session.AuthSession(
-                settings, transport, serialize.deserialize40, "4.0"),
+                settings, transport, serialize.deserialize40, "4.0"
+            ),
             serialize.deserialize40,
             serialize.serialize40,
             transport,
@@ -82,8 +86,7 @@ class Fetcher:
         """Returns a list of projects."""
         try:
             if project_id:
-                projects: Sequence[models.Project] = [
-                    self.sdk.project(project_id)]
+                projects: Sequence[models.Project] = [self.sdk.project(project_id)]
             else:
                 projects = self.sdk.all_projects()
         except error.SDKError:
@@ -99,8 +102,7 @@ class Fetcher:
             self.get_projects(project)
         try:
             if model:
-                ml: Sequence[models.LookmlModel] = [
-                    self.sdk.lookml_model(model)]
+                ml: Sequence[models.LookmlModel] = [self.sdk.lookml_model(model)]
             else:
                 ml = self.sdk.all_lookml_models()
         except error.SDKError:
@@ -109,7 +111,10 @@ class Fetcher:
             if project:
                 # .lower() is used so behavior is consistent with /project endpoint
                 ml = list(
-                    filter(lambda m: m.project_name.lower() == project.lower(), ml,)  # type: ignore  # noqa: B950
+                    filter(
+                        lambda m: m.project_name.lower() == project.lower(),
+                        ml,
+                    )  # type: ignore  # noqa: B950
                 )
             ml = list(filter(lambda m: cast(bool, m.has_content), ml))
         return ml
@@ -385,7 +390,8 @@ class Fetcher:
             writer.writerows(data)
 
     def _tabularize_and_print(
-        self, data: Sequence[Dict[str, Union[int, str, bool]]],
+        self,
+        data: Sequence[Dict[str, Union[int, str, bool]]],
     ):
         """Prints data in tabular form."""
         if not data:
