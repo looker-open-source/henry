@@ -223,7 +223,10 @@ def setup_vacuum_subparser(subparsers):
 
 def add_common_arguments(parser: argparse.ArgumentParser):
     parser.add_argument(
-        "--save", action="store_true", default=False, help="Save output to CSV.",
+        "--save",
+        action="store_true",
+        default=False,
+        help="Save output to CSV.",
     )
     parser.add_argument("-q", "--quiet", action="store_true", help="Silence output")
     parser.add_argument("--timeout", type=int, default=120, help=argparse.SUPPRESS)

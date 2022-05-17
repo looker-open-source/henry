@@ -1,5 +1,6 @@
-from typing import cast, Optional
+from typing import cast, Optional, List, Any
 
+from looker_sdk.sdk.api40 import models
 from henry.modules import spinner
 from henry.modules import fetcher
 
@@ -16,16 +17,18 @@ class Analyze(fetcher.Fetcher):
             result = analyze.explores(
                 model=user_input.model, explore=user_input.explore
             )
+        else:
+            raise ValueError("Please specify one of 'projects', 'models' or 'explores'")
         analyze.output(data=cast(fetcher.TResult, result))
 
     @spinner.Spinner()
     def projects(self, *, id: Optional[str] = None) -> fetcher.TResult:
         """Analyzes all projects or a specific project."""
         projects = self.get_projects(project_id=id)
-        result = []
+        result: List[Any] = []
         for p in projects:
             assert isinstance(p.name, str)
-            assert isinstance(p.pull_request_mode, str)
+            assert isinstance(p.pull_request_mode, models.PullRequestMode)
             assert isinstance(p.validation_required, bool)
             p_files = self.sdk.all_project_files(p.name)
 
@@ -42,7 +45,7 @@ class Analyze(fetcher.Fetcher):
                     "# Models": sum(map(lambda p: p.type == "model", p_files)),
                     "# View Files": sum(map(lambda p: p.type == "view", p_files)),
                     "Git Connection Status": git_connection_test_results,
-                    "PR Mode": p.pull_request_mode,
+                    "PR Mode": p.pull_request_mode.value,
                     "Is Validation Required": p.validation_required,
                 }
             )

@@ -1,7 +1,7 @@
 from typing import Callable, Dict, Optional, Sequence, Tuple, Union
 
 import pytest  # type: ignore
-from looker_sdk import methods, models
+from looker_sdk.sdk.api40 import methods, models
 
 from henry.modules import exceptions, fetcher
 
@@ -178,7 +178,7 @@ def test_get_explore_fields_gets_fields_for_dimension_or_measure_only_explores(
 
 def test_get_explore_field_stats(
     fc: fetcher.Fetcher,
-    looker_sdk: methods.LookerSDK,
+    looker_sdk: methods.Looker40SDK,
     test_model,
     test_used_explore_names,
     test_explores_stats,

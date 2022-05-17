@@ -4,7 +4,7 @@ from henry import __version__ as pkg
 
 NAME = "henry"
 VERSION = pkg.__version__
-REQUIRES = ["looker-sdk==0.1.3b7", "tabulate"]
+REQUIRES = ["looker-sdk>=21", "tabulate"]
 
 setup(
     author="Joseph Axisa",
@@ -20,7 +20,7 @@ setup(
     data_files=[("henry/.support_files/", ["henry/.support_files/help.rtf"])],
     include_package_data=True,
     entry_points={"console_scripts": ["henry=henry.cli:main"]},
-    python_requires=">=3.7.0, <3.8",
+    python_requires=">=3.7.0",
     url="https://pypi.python.org/pypi/henry",
     version=VERSION,
 )
