@@ -246,7 +246,7 @@ It is very important to note that fields listed as unused in one explore are not
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/looker-open-source/henry/issues. This project is intended to be a safe, welcoming space for collaboration, and contributors are expected to adhere to the [Contributor Covenant](http://contributor-covenant.org) code of conduct.
+Please refer to the [CONTRIBUTING file](https://github.com/looker-open-source/henry/blob/master/CONTRIBUTING.md). Bug reports and pull requests are welcome on GitHub at https://github.com/looker-open-source/henry/issues.
 
 <a name="code_of_conduct"></a>
 
