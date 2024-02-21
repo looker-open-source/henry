@@ -126,7 +126,7 @@ class Fetcher:
             models.WriteQuery(
                 model="i__looker",
                 view="history",
-                fields=["history.query_run_count, query.model"],
+                fields=["history.query_run_count", "query.model"],
                 filters={
                     "history.created_date": self.timeframe,
                     "query.model": "-system^_^_activity, -i^_^_looker",
