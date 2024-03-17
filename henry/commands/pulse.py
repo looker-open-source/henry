@@ -2,7 +2,7 @@ import json
 from textwrap import fill
 from typing import Sequence, cast
 
-from looker_sdk import models
+from looker_sdk.sdk.api40 import models
 from looker_sdk.error import SDKError
 
 from henry.modules import exceptions, fetcher, spinner
@@ -40,16 +40,20 @@ class Pulse(fetcher.Fetcher):
         for connection in db_connections:
             assert connection.dialect
             assert isinstance(connection.name, str)
-            resp = self.sdk.test_connection(
-                connection.name,
-                models.DelimSequence(connection.dialect.connection_tests),
-            )
-            results = list(filter(lambda r: r.status == "error", resp))
-            errors = [f"- {fill(cast(str, e.message), width=100)}" for e in results]
+            try:
+                resp = self.sdk.test_connection(
+                    connection.name,
+                    models.DelimSequence(connection.dialect.connection_tests),
+                )
+                results = list(filter(lambda r: r.status == "error", resp))
+                errors = [f"- {fill(cast(str, e.message), width=100)}" for e in results]
+            except SDKError:
+                results = []
+                errors = ["API JSONDecode Error"]
             resp = self.sdk.run_inline_query(
                 "json",
                 models.WriteQuery(
-                    model="i__looker",
+                    model="system__activity",
                     view="history",
                     fields=["history.query_run_count"],
                     filters={"history.connection_name": connection.name},
@@ -76,7 +80,7 @@ class Pulse(fetcher.Fetcher):
             "30 seconds in the last 7 days"
         )
         request = models.WriteQuery(
-            model="i__looker",
+            model="system__activity",
             view="history",
             fields=["dashboard.title, query.count"],
             filters={
@@ -99,7 +103,7 @@ class Pulse(fetcher.Fetcher):
             "\bTest 3/6: Checking for dashboards with erroring queries in the last 7 days"  # noqa: B950
         )
         request = models.WriteQuery(
-            model="i__looker",
+            model="system__activity",
             view="history",
             fields=["dashboard.title", "history.query_run_count"],
             filters={
@@ -120,7 +124,7 @@ class Pulse(fetcher.Fetcher):
         """Prints a list of the slowest running explores."""
         print("\bTest 4/6: Checking for the slowest explores in the past 7 days")
         request = models.WriteQuery(
-            model="i__looker",
+            model="system__activity",
             view="history",
             fields=["query.model", "query.view", "history.average_runtime"],
             filters={
@@ -148,7 +152,7 @@ class Pulse(fetcher.Fetcher):
         """Prints a list of schedules that have failed in the past 7 days."""
         print("\bTest 5/6: Checking for failing schedules")
         request = models.WriteQuery(
-            model="i__looker",
+            model="system__activity",
             view="scheduled_plan",
             fields=["scheduled_job.name", "scheduled_job.count"],
             filters={
@@ -166,6 +170,9 @@ class Pulse(fetcher.Fetcher):
     def check_legacy_features(self):
         """Prints a list of enabled legacy features."""
         print("\bTest 6/6: Checking for enabled legacy features")
-        lf = list(filter(lambda f: f.enabled, self.sdk.all_legacy_features()))
-        legacy_features = [{"Feature": cast(str, f.name)} for f in lf]
+        try:
+            lf = list(filter(lambda f: f.enabled, self.sdk.all_legacy_features()))
+            legacy_features = [{"Feature": cast(str, f.name)} for f in lf]
+        except SDKError:
+            legacy_features = [["Unable to pull legacy features due to SDK error"]]
         self._tabularize_and_print(legacy_features)
