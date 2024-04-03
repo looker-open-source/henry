@@ -2,7 +2,7 @@ import json
 from textwrap import fill
 from typing import Sequence, cast
 
-from looker_sdk import models
+from looker_sdk.sdk.api40 import models
 from looker_sdk.error import SDKError
 
 from henry.modules import exceptions, fetcher, spinner
