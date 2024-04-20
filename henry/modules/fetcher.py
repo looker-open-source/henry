@@ -124,14 +124,14 @@ class Fetcher:
         resp = self.sdk.run_inline_query(
             "json",
             models.WriteQuery(
-                model="i__looker",
+                model="system__activity",
                 view="history",
-                fields=["history.query_run_count, query.model"],
+                fields=["history.query_run_count", "query.model"],
                 filters={
                     "history.created_date": self.timeframe,
                     "query.model": "-system^_^_activity, -i^_^_looker",
                     "history.query_run_count": ">0",
-                    "user.dev_mode": "No",
+                    "user.dev_branch_name": "NULL",
                 },
                 limit="5000",
             ),
@@ -177,7 +177,7 @@ class Fetcher:
         resp = self.sdk.run_inline_query(
             "json",
             models.WriteQuery(
-                model="i__looker",
+                model="system__activity",
                 view="history",
                 fields=["query.view", "history.query_run_count"],
                 filters={
@@ -185,7 +185,7 @@ class Fetcher:
                     "query.model": model.replace("_", "^_") if model else "",
                     "history.query_run_count": ">0",
                     "query.view": explore,
-                    "user.dev_mode": "No",
+                    "user.dev_branch_name": "NULL",
                 },
                 limit="5000",
             ),
@@ -225,13 +225,13 @@ class Fetcher:
         resp = self.sdk.run_inline_query(
             "json",
             models.WriteQuery(
-                model="i__looker",
+                model="system__activity",
                 view="history",
                 fields=[
                     "query.model",
                     "query.view",
                     "query.formatted_fields",
-                    "query.formatted_filters",
+                    "query.filters",
                     "history.query_run_count",
                 ],
                 filters={
@@ -261,9 +261,9 @@ class Fetcher:
             # A field used as a filter in a query is not listed in
             # query.formatted_fields BUT if the field is used as both a filter
             # and a dimension/measure, it's listed in both query.formatted_fields
-            # and query.formatted_filters. The recorded variable keeps track of
+            # and query.filters. The recorded variable keeps track of
             # this, so that no double counting occurs.
-            filters = row["query.formatted_filters"]
+            filters = row["query.filters"]
             if filters:
                 parsed_filters = re.findall(r"(\w+\.\w+)+", filters)
                 for f in parsed_filters:
