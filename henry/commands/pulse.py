@@ -28,7 +28,12 @@ class Pulse(fetcher.Fetcher):
         """Gets all db connections and runs all supported tests against them."""
         print("\bTest 1/6: Checking connections")
 
-        reserved_names = ["looker__internal__analytics__replica", "looker__internal__analytics", "looker", "looker__ilooker"]
+        reserved_names = [
+            "looker__internal__analytics__replica",
+            "looker__internal__analytics",
+            "looker",
+            "looker__ilooker",
+        ]
         db_connections: Sequence[models.DBConnection] = list(
             filter(lambda c: c.name not in reserved_names, self.sdk.all_connections())
         )
@@ -82,7 +87,7 @@ class Pulse(fetcher.Fetcher):
         request = models.WriteQuery(
             model="system__activity",
             view="history",
-            fields=["dashboard.title, query.count"],
+            fields=["dashboard.title", "query.count"],
             filters={
                 "history.created_date": "7 days",
                 "history.real_dash_id": "-NULL",
@@ -176,3 +181,4 @@ class Pulse(fetcher.Fetcher):
         except SDKError:
             legacy_features = [["Unable to pull legacy features due to SDK error"]]
         self._tabularize_and_print(legacy_features)
+
