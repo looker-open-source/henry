@@ -17,8 +17,7 @@ jobs:
   publish:
     if: >
       (github.event.inputs) ||
-      (startsWith(github.event.release.tag_name, 'henry') &&
-      !github.event.release.draft &&
+      (!github.event.release.draft &&
       !github.event.release.prerelease)
     runs-on: ubuntu-latest
     steps:
@@ -40,3 +39,4 @@ jobs:
           user: __token__
           password: ${{ secrets.PYPI_API_TOKEN }}
           packages_dir: dist/
+
