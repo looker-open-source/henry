@@ -32,7 +32,9 @@ class Analyze(fetcher.Fetcher):
             assert isinstance(p.validation_required, bool)
             p_files = self.sdk.all_project_files(p.name)
 
-            if "/bare_models/" in cast(str, p.git_remote_url):
+            if p.git_remote_url is None:
+                git_connection_test_results = "No repo found"
+            elif "/bare_models/" in cast(str, p.git_remote_url):
                 git_connection_test_results = "Bare repo, no tests required"
             else:
                 git_connection_test_results = self.run_git_connection_tests(
