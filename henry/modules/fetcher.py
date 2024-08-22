@@ -320,7 +320,15 @@ class Fetcher:
     def run_git_connection_tests(self, project_id: str):
         """Run all git connection tests for a given project."""
         self.sdk.update_session(models.WriteApiSession(workspace_id="dev"))
-        supported_tests = self.sdk.all_git_connection_tests(project_id)
+
+        try:
+            supported_tests = self.sdk.all_git_connection_tests(project_id, transport_options={"headers": {"Accept": "application/json"}})
+        except error.SDKError as e:
+            if e.message == "The resource you're looking for could not be found":
+                return "Project not found in development mode"
+            else:
+                return "Error running git connection tests"
+
         results = []
         for test in supported_tests:
             assert isinstance(test.id, str)
