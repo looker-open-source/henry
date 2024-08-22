@@ -53,7 +53,9 @@ class Fetcher:
         """Instantiates and returns a LookerSDK object and overrides default timeout if
         specified by user.
         """
-        settings = api_settings.ApiSettings(filename=config_file, section=section)
+        settings = api_settings.ApiSettings(
+            filename=config_file, section=section, env_prefix="LOOKERSDK"
+        )
         user_agent_tag = f"Henry v{pkg.__version__}: cmd={self.cmd}, sid={uuid.uuid1()}"
         settings.headers = {
             "Content-Type": "application/json",
