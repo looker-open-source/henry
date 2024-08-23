@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.1](https://github.com/looker-open-source/henry/compare/v0.4.0...v0.4.1) (2024-08-23)
+
+
+### Bug Fixes
+
+* display appropriate output when no repo found for project ([955bb57](https://github.com/looker-open-source/henry/commit/955bb57704c186c9762787f42da4af94c1de0bd4))
+* display appropriate output when project does not exist in development mode (edge case) ([a7122ad](https://github.com/looker-open-source/henry/commit/a7122ad40686338d812251024acdc652bc84216d))
+
 ## [0.4.0](https://github.com/looker-open-source/henry/compare/v0.3.0...v0.4.0) (2024-08-19)
 
 
