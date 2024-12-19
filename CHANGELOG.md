@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.3](https://github.com/looker-open-source/henry/compare/v0.4.2...v0.4.3) (2024-12-19)
+
+
+### Bug Fixes
+
+* handle NotFound error when fetching explore against internal fields ([#114](https://github.com/looker-open-source/henry/issues/114)) ([75c127f](https://github.com/looker-open-source/henry/commit/75c127f7b344556f54f23207d99d7d41bab275ef))
+
 ## [0.4.2](https://github.com/looker-open-source/henry/compare/v0.4.1...v0.4.2) (2024-08-23)
 
 
