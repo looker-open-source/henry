@@ -157,16 +157,30 @@ class Fetcher:
                     assert isinstance(m.name, str)
                     assert isinstance(m.explores, list)
                     explores.extend(
-                        [
-                            self.sdk.lookml_model_explore(m.name, cast(str, e.name))
-                            for e in m.explores
-                        ]
+                        list(
+                            filter(None,
+                                    [
+                                      self.lookml_model_explore(m.name, cast(str, e.name))
+                                      for e in m.explores
+                                    ]
+                            )
+                        )
                     )
         except error.SDKError:
             raise exceptions.NotFoundError(
-                "An error occured while getting models/explores."
+                f"An error occured while getting model:{model}/explore:{explore}."
             )
         return explores
+
+    def lookml_model_explore(self, model: str, explore: str):
+        try:
+            return self.sdk.lookml_model_explore(model, explore)
+        except error.SDKError as e:
+            if e.message == 'Not found':
+                print(f"No Data Found while getting model {model}/explore {explore}.")
+            else:
+                raise
+        return []
 
     def get_used_explores(
         self, *, model: Optional[str] = None, explore: str = ""
