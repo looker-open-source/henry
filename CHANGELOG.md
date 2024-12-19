@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.4](https://github.com/looker-open-source/henry/compare/v0.4.3...v0.4.4) (2024-12-19)
+
+
+### Bug Fixes
+
+* update package version number ([#119](https://github.com/looker-open-source/henry/issues/119)) ([705ba92](https://github.com/looker-open-source/henry/commit/705ba92b5e948056c07e9593856a39331ea3cc9c))
+
 ## [0.4.3](https://github.com/looker-open-source/henry/compare/v0.4.2...v0.4.3) (2024-12-19)
 
 
