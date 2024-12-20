@@ -20,6 +20,7 @@ import tabulate
 from looker_sdk import error
 from looker_sdk.rtl import api_settings, auth_session, requests_transport, serialize
 from looker_sdk.sdk.api40 import methods, models
+from looker_sdk.sdk import constants
 
 from henry.modules import exceptions
 
@@ -53,7 +54,11 @@ class Fetcher:
         """Instantiates and returns a LookerSDK object and overrides default timeout if
         specified by user.
         """
-        settings = api_settings.ApiSettings(filename=config_file, section=section)
+        settings = api_settings.ApiSettings(
+            filename=config_file,
+            section=section,
+            env_prefix=constants.environment_prefix,
+        )
         user_agent_tag = f"Henry v{pkg.__version__}: cmd={self.cmd}, sid={uuid.uuid1()}"
         settings.headers = {
             "Content-Type": "application/json",
