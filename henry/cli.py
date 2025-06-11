@@ -8,7 +8,7 @@ from henry.commands import analyze, pulse, vacuum
 from henry.modules import fetcher
 
 
-def main():
+def main() -> None:
     parser = setup_cli()
     user_input = parse_input(parser)
 
@@ -19,16 +19,16 @@ def main():
     elif user_input.command == "vacuum":
         vacuum.Vacuum.run(user_input)
     else:
-        parser.error()
+        parser.error("Unable to parse cli commands")
 
 
-def setup_cli():
+def setup_cli() -> argparse.ArgumentParser:
     parser = create_parser()
     setup_subparsers(parser)
     return parser
 
 
-def create_parser():
+def create_parser() -> argparse.ArgumentParser:
     help_file = os.path.join(os.path.dirname(henry.__file__), ".support_files/help.rtf")
     with open(help_file, "r", encoding="unicode_escape") as myfile:
         description = myfile.read()
@@ -49,14 +49,14 @@ def create_parser():
     return parser
 
 
-def setup_subparsers(parser):
+def setup_subparsers(parser: argparse.ArgumentParser) -> None:
     subparsers = parser.add_subparsers(dest="command", help=argparse.SUPPRESS)
     setup_pulse_subparser(subparsers)
     setup_analyze_subparser(subparsers)
     setup_vacuum_subparser(subparsers)
 
 
-def setup_pulse_subparser(subparsers):
+def setup_pulse_subparser(subparsers: argparse._SubParsersAction) -> None:
     pulse_parser = subparsers.add_parser(
         "pulse", help="pulse help", usage="henry pulse [global options]"
     )
@@ -72,7 +72,7 @@ def setup_pulse_subparser(subparsers):
     )
 
 
-def setup_analyze_subparser(subparsers):
+def setup_analyze_subparser(subparsers: argparse._SubParsersAction) -> None:
     analyze_parser = subparsers.add_parser(
         "analyze", help="analyze help", usage="henry analyze"
     )
@@ -165,7 +165,7 @@ def setup_analyze_subparser(subparsers):
     add_common_arguments(analyze_explores)
 
 
-def setup_vacuum_subparser(subparsers):
+def setup_vacuum_subparser(subparsers: argparse._SubParsersAction) -> None:
     vacuum_parser = subparsers.add_parser(
         "vacuum", help="vacuum help", usage="henry vacuum"
     )
@@ -221,7 +221,7 @@ def setup_vacuum_subparser(subparsers):
     add_common_arguments(vacuum_explores)
 
 
-def add_common_arguments(parser: argparse.ArgumentParser):
+def add_common_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--save",
         action="store_true",
@@ -237,7 +237,7 @@ def add_common_arguments(parser: argparse.ArgumentParser):
     parser.add_argument("--section", type=str, default="Looker", help=argparse.SUPPRESS)
 
 
-def parse_input(parser: argparse.ArgumentParser):
+def parse_input(parser: argparse.ArgumentParser) -> fetcher.Input:
     args = vars(parser.parse_args())
     return fetcher.Input(**args)
 
