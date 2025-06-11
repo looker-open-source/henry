@@ -133,7 +133,7 @@ class Fetcher:
                     "history.query_run_count": ">0",
                     "user.dev_branch_name": "NULL",
                 },
-                limit="5000",
+                limit="-1",
             ),
         )
         _results: MutableSequence[Dict[str, int]] = json.loads(resp)
@@ -201,7 +201,7 @@ class Fetcher:
                     "query.view": explore,
                     "user.dev_branch_name": "NULL",
                 },
-                limit="5000",
+                limit="-1",
             ),
         )
         _results: MutableSequence[Dict[str, int]] = json.loads(resp)
@@ -255,7 +255,7 @@ class Fetcher:
                     "query.formatted_fields": "-NULL",
                     "history.workspace_id": "production",
                 },
-                limit="5000",
+                limit="-1",
             ),
         )
         data = json.loads(resp)
